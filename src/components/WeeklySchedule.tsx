@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Download } from 'lucide-react';
 import TimeInput from './TimeInput';
 import { Employee, Schedule, ColorLabel } from '../types';
 import ColorPicker from './ColorPicker';
@@ -7,6 +8,7 @@ import DraggableEmployeeList from './DraggableEmployeeList';
 import { COLOR_OPTIONS } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
+import { exportToPDF } from '../utils/pdfExport';
 
 interface WeeklyScheduleProps {
   employees: Employee[];
@@ -40,6 +42,23 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
 
+  const handleExportPDF = async () => {
+    try {
+      await exportToPDF({
+        employees,
+        days,
+        dates,
+        schedules,
+        weekNumber,
+        year,
+        colorLabels
+      });
+    } catch (error) {
+      console.error('Erreur lors de l\'export PDF:', error);
+      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+    }
+  };
+
   const handleEmployeeDragStart = (index: number) => {
     setDragOverEmployeeIndex(index);
   };
@@ -68,13 +87,21 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="px-4">
+      <div className="px-4 flex justify-between items-center">
         <ColorPicker 
           selectedColor={selectedColor} 
           onColorChange={setSelectedColor}
           colorLabels={colorLabels}
           onColorLabelChange={onColorLabelChange}
         />
+        
+        <button
+          onClick={handleExportPDF}
+          className="flex items-center gap-2 px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          <Download className="w-5 h-5" />
+          <span>Exporter PDF</span>
+        </button>
       </div>
       
       <ColorLegends colorLabels={colorLabels} />

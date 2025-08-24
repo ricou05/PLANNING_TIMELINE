@@ -8,7 +8,6 @@ import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/peri
 import { calculateDailyHours } from '../utils/timeCalculations';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { X, Download } from 'lucide-react';
-import { exportToPDF } from '../utils/pdfExport';
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -63,22 +62,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
-
-  const handleExportPDF = async () => {
-    try {
-      await exportToPDF({
-        employees,
-        days: [day],
-        dates,
-        schedules,
-        weekNumber,
-        year,
-        colorLabels
-      });
-    } catch (error) {
-      console.error('Erreur lors de l\'export PDF:', error);
-    }
-  };
 
   const handleEmployeeDragStart = (index: number) => {
     setDraggedEmployeeIndex(index);
@@ -271,21 +254,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="px-4 flex justify-between items-center">
+      <div className="px-4">
         <ColorPicker 
           selectedColor={selectedColor} 
           onColorChange={setSelectedColor}
           colorLabels={colorLabels}
           onColorLabelChange={onColorLabelChange}
         />
-        
-        <button
-          onClick={handleExportPDF}
-          className="flex items-center gap-2 px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Download className="w-5 h-5" />
-          <span>Exporter PDF</span>
-        </button>
       </div>
       
       <div 
