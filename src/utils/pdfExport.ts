@@ -112,10 +112,12 @@ const createPDFTable = ({
 
     // Afternoon row
     const afternoonRow = document.createElement('tr');
+    afternoonRow.style.borderTop = '0.5px solid #000'; // Thinner line between morning and afternoon
     
     const afternoonLabel = document.createElement('td');
     afternoonLabel.style.padding = '8px';
     afternoonLabel.style.border = '1px solid #000';
+    afternoonLabel.style.borderTop = '0.5px solid #000'; // Thinner top border
     afternoonLabel.textContent = 'Après-midi';
     afternoonRow.appendChild(afternoonLabel);
 
@@ -124,6 +126,7 @@ const createPDFTable = ({
       const td = document.createElement('td');
       td.style.padding = '8px';
       td.style.border = '1px solid #000';
+      td.style.borderTop = '0.5px solid #000'; // Thinner top border
       td.style.textAlign = 'center';
       
       if (schedule.afternoonStart && schedule.afternoonEnd) {
