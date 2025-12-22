@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ColorOption, COLOR_OPTIONS } from '../utils/colorUtils';
+import { COLOR_OPTIONS } from '../utils/colorUtils';
 import { ColorLabel } from '../types';
 
 interface ColorPickerProps {

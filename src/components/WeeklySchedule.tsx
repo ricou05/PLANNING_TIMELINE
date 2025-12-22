@@ -40,6 +40,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onColorLabelChange
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
+  const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
 
   const handleExportPDF = async () => {
@@ -60,16 +61,29 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   };
 
   const handleEmployeeDragStart = (index: number) => {
+    setDraggedEmployeeIndex(index);
     setDragOverEmployeeIndex(index);
   };
 
   const handleEmployeeDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    if (draggedEmployeeIndex === null || draggedEmployeeIndex === index) {
+      setDragOverEmployeeIndex(index);
+      return;
+    }
+
+    const reorderedEmployees = [...employees];
+    const [draggedEmployee] = reorderedEmployees.splice(draggedEmployeeIndex, 1);
+    reorderedEmployees.splice(index, 0, draggedEmployee);
+
+    onEmployeeReorder(reorderedEmployees);
+    setDraggedEmployeeIndex(index);
     setDragOverEmployeeIndex(index);
   };
 
   const handleEmployeeDrop = () => {
     setDragOverEmployeeIndex(null);
+    setDraggedEmployeeIndex(null);
   };
 
   const getCellStyle = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): string => {

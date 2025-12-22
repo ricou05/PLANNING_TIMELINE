@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Save } from 'lucide-react';
 import { SavedSchedule } from '../../types';
+import { formatTimestamp } from '../../utils/dateUtils';
 
 interface SaveAsDialogProps {
   defaultName: string;
@@ -28,14 +29,6 @@ const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
     } else {
       onSave(saveName.trim() || defaultName);
     }
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return '';
-    return new Date(timestamp.seconds * 1000).toLocaleString('fr-FR', {
-      dateStyle: 'short',
-      timeStyle: 'short'
-    });
   };
 
   return (
@@ -76,12 +69,12 @@ const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">{schedule.name}</span>
                       <span className="text-xs text-gray-500">
-                        Créé le {formatDate(schedule.createdAt)}
+                        Créé le {formatTimestamp(schedule.createdAt)}
                       </span>
                     </div>
                     {schedule.updatedAt && schedule.updatedAt !== schedule.createdAt && (
                       <span className="text-xs text-gray-500">
-                        Modifié le {formatDate(schedule.updatedAt)}
+                        Modifié le {formatTimestamp(schedule.updatedAt)}
                       </span>
                     )}
                   </button>

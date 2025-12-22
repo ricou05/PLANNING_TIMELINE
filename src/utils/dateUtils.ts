@@ -3,7 +3,7 @@ export function getWeekDates(weekNumber: number, year: number = new Date().getFu
   const date = new Date(year, 0, 1);
   
   // Obtenir le jour de la semaine (0-6, 0 étant dimanche)
-  let dayNum = date.getDay();
+  const dayNum = date.getDay();
   
   // Reculer au lundi de la première semaine
   // Si c'est dimanche (0), reculer de 6 jours
@@ -38,7 +38,9 @@ export function getCurrentWeekNumber(): number {
   return week + 1;
 }
 
-export function formatTimestamp(timestamp: any): string {
+type SupportedTimestamp = Date | { toDate?: () => Date } | { seconds: number; nanoseconds?: number } | null | undefined;
+
+export function formatTimestamp(timestamp: SupportedTimestamp): string {
   if (!timestamp) return '';
   
   // Si c'est déjà une Date
@@ -64,7 +66,7 @@ export function formatTimestamp(timestamp: any): string {
   }
   
   // Si c'est un objet avec seconds (pour la compatibilité avec le stockage local)
-  if (timestamp?.seconds) {
+  if ('seconds' in timestamp) {
     return new Date(timestamp.seconds * 1000).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: '2-digit',

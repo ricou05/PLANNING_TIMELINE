@@ -1,7 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Employee, Schedule, ColorLabel } from '../types';
-import { calculateWeeklyHours } from './scheduleCalculations';
 import { COLOR_OPTIONS } from './colorUtils';
 
 interface ExportToPDFParams {
@@ -71,8 +70,6 @@ const createPDFTable = ({
   // Body
   const tbody = document.createElement('tbody');
   employees.forEach(employee => {
-    const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
-
     // Morning row
     const morningRow = document.createElement('tr');
     

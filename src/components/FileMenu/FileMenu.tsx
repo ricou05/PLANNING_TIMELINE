@@ -1,22 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getSchedules, saveSchedule, updateSchedule } from '../../utils/firebase';
 import { SavedSchedule } from '../../types';
 import SaveAsDialog from './SaveAsDialog';
 import RestoreDialog from './RestoreDialog';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
-import { validateSaveData } from '../../utils/validation';
+import { validateSaveData, SaveData } from '../../utils/validation';
 import StatusMessage from './StatusMessage';
 import TopBar from '../TopBar/TopBar';
 
 interface FileMenuProps {
   onRestore: (savedSchedule: SavedSchedule) => void;
-  onSave: () => Promise<{
-    schedules: any;
-    employees: any[];
-    weekNumber: number;
-    year: number;
-    colorLabels: any[];
-  }>;
+  onSave: () => Promise<SaveData>;
   onNewSchedule?: () => void;
 }
 
@@ -30,11 +24,7 @@ const FileMenu: React.FC<FileMenuProps> = ({ onRestore, onSave, onNewSchedule })
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<SavedSchedule | null>(null);
 
-  useEffect(() => {
-    loadSavedSchedules();
-  }, []);
-
-  const loadSavedSchedules = async () => {
+  const loadSavedSchedules = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -52,7 +42,11 @@ const FileMenu: React.FC<FileMenuProps> = ({ onRestore, onSave, onNewSchedule })
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadSavedSchedules();
+  }, [loadSavedSchedules]);
 
   const handleSave = async (name: string, scheduleToUpdate?: SavedSchedule) => {
     try {

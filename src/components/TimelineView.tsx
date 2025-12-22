@@ -7,7 +7,7 @@ import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../ut
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours } from '../utils/timeCalculations';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
-import { X, Download } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -19,9 +19,6 @@ interface TimelineViewProps {
   onEmployeeDelete: (id: number) => void;
   colorLabels: ColorLabel[];
   onColorLabelChange: (colorLabel: ColorLabel) => void;
-  weekNumber: number;
-  year: number;
-  dates: string[];
 }
 
 const HOUR_WIDTH = 80;
@@ -40,10 +37,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onEmployeeReorder,
   onEmployeeDelete,
   colorLabels,
-  onColorLabelChange,
-  weekNumber,
-  year,
-  dates
+  onColorLabelChange
 }) => {
   const [selectedColor, setSelectedColor] = useState('bleu');
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -59,6 +53,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isCreating, setIsCreating] = useState(false);
+  const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
 
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
@@ -116,7 +111,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handlePeriodClick = (e: React.MouseEvent, employeeId: number, period: 'morning' | 'afternoon') => {
     e.stopPropagation();
     if (!isResizing && !isDragging) {
-      const schedule = schedules[`${employeeId}-${day}`] || {};
       onScheduleChange(employeeId, day, `${period}Color`, selectedColor);
     }
   };

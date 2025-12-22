@@ -12,7 +12,7 @@ export const getLocalSchedules = async (): Promise<SavedSchedule[]> => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
-  } catch (error) {
+  } catch {
     return [];
   }
 };

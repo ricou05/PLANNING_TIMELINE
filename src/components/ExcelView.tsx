@@ -30,7 +30,7 @@ const ExcelView: React.FC<ExcelViewProps> = ({
     const wb = XLSX.utils.book_new();
     
     // Préparer les données
-    const wsData: any[][] = [];
+    const wsData: (string | number)[][] = [];
     
     // En-tête avec les dates
     const headerRow = ['Employé'];

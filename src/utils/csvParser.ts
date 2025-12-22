@@ -28,10 +28,6 @@ export const parseCSV = (
     return result;
   }
 
-  // Vérification des en-têtes
-  const headerLine = lines[0];
-  const daysLine = lines[1];
-  
   // Extraction des jours de la semaine
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   

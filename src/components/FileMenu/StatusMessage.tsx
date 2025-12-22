@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Check, AlertTriangle, WifiOff } from 'lucide-react';
 
 interface StatusMessageProps {
   error: string | null;

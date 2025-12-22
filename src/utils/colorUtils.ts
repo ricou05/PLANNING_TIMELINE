@@ -1,5 +1,3 @@
-import { RAL_COLORS } from './colors';
-
 export interface ColorOption {
   name: string;
   bgClass: string;

@@ -1,6 +1,5 @@
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from './config';
-import { SavedSchedule } from '../../types';
 
 export interface ValidationResult {
   success: boolean;
@@ -95,11 +94,6 @@ export async function validateSavePermissions(): Promise<ValidationResult> {
 
   try {
     // Tester l'écriture dans Firebase
-    const testData = {
-      test: true,
-      timestamp: Timestamp.now()
-    };
-
     const testRef = collection(db, 'schedules');
     await getDocs(query(testRef, where('test', '==', true)));
 
@@ -107,7 +101,7 @@ export async function validateSavePermissions(): Promise<ValidationResult> {
     try {
       localStorage.setItem('test', 'test');
       localStorage.removeItem('test');
-    } catch (error) {
+    } catch {
       result.errors.push('Pas d\'accès au stockage local');
       result.success = false;
     }
@@ -122,10 +116,9 @@ export async function validateSavePermissions(): Promise<ValidationResult> {
 
 function calculateLocalStorageUsage(): number {
   let total = 0;
-  for (const key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      total += (localStorage[key].length + key.length) * 2; // Approximation en bytes
-    }
-  }
+  Object.keys(localStorage).forEach((key) => {
+    const value = localStorage.getItem(key) || '';
+    total += (value.length + key.length) * 2; // Approximation en bytes
+  });
   return total;
 }

@@ -11,7 +11,7 @@ interface TimeInputProps {
 const TimeInput: React.FC<TimeInputProps> = ({ 
   value, 
   onChange, 
-  placeholder,
+  placeholder = ':',
   minTime = '06:30',
   maxTime = '20:00'
 }) => {
@@ -98,7 +98,7 @@ const TimeInput: React.FC<TimeInputProps> = ({
       value={inputValue}
       onChange={handleChange}
       onBlur={handleBlur}
-      placeholder=":"
+      placeholder={placeholder}
       maxLength={5}
       className="w-14 px-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-center text-black font-medium"
       style={{ height: '24px', lineHeight: '24px' }}
