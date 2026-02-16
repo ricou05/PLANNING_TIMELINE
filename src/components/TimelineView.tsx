@@ -6,7 +6,7 @@ import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
-import { X, Download } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -45,6 +45,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   dates
 }) => {
   const [selectedColor, setSelectedColor] = useState('bleu');
+  const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | null>(null);
