@@ -141,7 +141,7 @@ const ExcelView: React.FC<ExcelViewProps> = ({
       
       <button
         onClick={exportToExcel}
-        className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all duration-150"
       >
         <FileSpreadsheet className="w-5 h-5" />
         Télécharger le fichier Excel

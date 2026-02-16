@@ -1,5 +1,5 @@
 import { Schedule } from '../types';
-import { calculateDailyHours } from './timeCalculations';
+import { calculateDailyHours } from './scheduleCalculations';
 
 export interface DailyTotals {
   [key: string]: number;

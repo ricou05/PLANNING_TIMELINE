@@ -67,7 +67,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 active:bg-green-800 shadow-sm transition-all duration-150"
       >
         <Upload className="w-5 h-5" />
         <span>Importer CSV</span>
@@ -90,7 +90,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
                     type="file"
                     accept=".csv"
                     onChange={handleFileChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Format attendu: CSV avec colonnes pour employés, jours et horaires
@@ -108,7 +108,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
                         name="importMode"
                         checked={importMode === 'merge'}
                         onChange={() => setImportMode('merge')}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                        className="h-4 w-4 text-blue-600 focus:ring-2 focus:ring-blue-500 transition-all duration-150"
                       />
                       <span className="text-sm text-gray-700">Fusionner</span>
                     </label>
@@ -118,7 +118,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
                         name="importMode"
                         checked={importMode === 'replace'}
                         onChange={() => setImportMode('replace')}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                        className="h-4 w-4 text-blue-600 focus:ring-2 focus:ring-blue-500 transition-all duration-150"
                       />
                       <span className="text-sm text-gray-700">Remplacer tout</span>
                     </label>
@@ -167,7 +167,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
                 <button
                   onClick={handleImport}
                   disabled={!file}
-                  className="px-4 py-2 text-sm text-white bg-indigo-600 rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm transition-all duration-150"
                 >
                   <Upload className="w-4 h-4" />
                   Importer

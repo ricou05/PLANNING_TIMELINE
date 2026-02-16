@@ -14,7 +14,7 @@ async function initializeApp() {
 
   createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <App initialOffline={!online} />
+      <App />
     </React.StrictMode>
   );
 }

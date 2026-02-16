@@ -208,8 +208,8 @@ function App() {
         onNewSchedule={handleNewSchedule}
       />
 
-      <main className="pt-20 max-w-[95%] mx-auto pb-8">
-        <div className="mb-6 flex items-center justify-between">
+      <main className="pt-20 max-w-[95%] mx-auto pb-8 animate-fadeIn">
+        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="year" className="text-sm font-medium text-gray-700">
@@ -222,7 +222,7 @@ function App() {
                 max="2100"
                 value={year}
                 onChange={handleYearChange}
-                className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ function App() {
                 max="53"
                 value={weekNumber}
                 onChange={handleWeekChange}
-                className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ function App() {
                 max="100"
                 value={employeeCount}
                 onChange={handleEmployeeCountChange}
-                className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
               />
             </div>
           </div>
@@ -261,10 +261,10 @@ function App() {
         <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setActiveTab('weekly')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
               ${activeTab === 'weekly'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
           >
             <Calendar className="h-4 w-4" />
@@ -273,24 +273,24 @@ function App() {
 
           <button
             onClick={() => setActiveTab('excel')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
               ${activeTab === 'excel'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
           >
             <FileSpreadsheet className="h-4 w-4" />
             Export Excel
           </button>
-          
+
           {DAYS.map((day, index) => (
             <button
               key={day}
               onClick={() => setActiveTab(day)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
                 ${activeTab === day
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                 }`}
             >
               <Clock className="h-4 w-4" />
@@ -302,7 +302,7 @@ function App() {
           ))}
         </div>
         
-        <div className="bg-white rounded-lg shadow-xl overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xl overflow-hidden animate-scaleIn">
           {renderContent()}
         </div>
       </main>

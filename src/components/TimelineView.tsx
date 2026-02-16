@@ -5,8 +5,7 @@ import { COLOR_OPTIONS } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
-import { calculateDailyHours } from '../utils/timeCalculations';
-import { calculateWeeklyHours } from '../utils/scheduleCalculations';
+import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { X, Download } from 'lucide-react';
 
 interface TimelineViewProps {
@@ -354,8 +353,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     {schedule.afternoonStart && schedule.afternoonEnd && (
                       <div
                         className={`absolute h-7 top-1 border rounded cursor-move group
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.bgClass : 'bg-indigo-100'}
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.borderClass : 'border-indigo-200'}`}
+                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.bgClass : 'bg-gray-100'}
+                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.borderClass : 'border-gray-300'}`}
                         style={{
                           left: calculatePosition(schedule.afternoonStart),
                           width: calculateWidth(schedule.afternoonStart, schedule.afternoonEnd),
@@ -366,7 +365,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
                         <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
                         <span className={`text-xs px-2 leading-[28px] whitespace-nowrap
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.textClass : 'text-indigo-800'}`}>
+                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.textClass : 'text-gray-700'}`}>
                           {schedule.afternoonStart} - {schedule.afternoonEnd}
                         </span>
                         <button
@@ -405,12 +404,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     )}
                   </div>
                   <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
-                    <span className="text-sm font-medium text-indigo-600">
+                    <span className="text-sm font-medium text-blue-600">
                       {dailyHours.toFixed(2)}h
                     </span>
                   </div>
                   <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
-                    <span className="text-sm font-medium text-indigo-600">
+                    <span className="text-sm font-medium text-blue-600">
                       {weeklyHours.toFixed(2)}h
                     </span>
                   </div>

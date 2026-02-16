@@ -51,12 +51,12 @@ const EmployeeNameEditor: React.FC<EmployeeNameEditorProps> = ({
       onChange={(e) => setName(e.target.value)}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      className={`w-full px-2 py-1 border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 ${className}`}
+      className={`w-full px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 ${className}`}
     />
   ) : (
     <span
       onDoubleClick={handleDoubleClick}
-      className={`block w-full cursor-pointer hover:text-indigo-600 ${className}`}
+      className={`block w-full cursor-pointer hover:text-blue-600 transition-colors duration-150 ${className}`}
       title="Double-cliquez pour modifier"
     >
       {employee.name}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { timeToMinutes } from '../utils/timeUtils';
 
 interface TimeInputProps {
   value: string;
@@ -8,19 +9,14 @@ interface TimeInputProps {
   maxTime?: string;
 }
 
-const TimeInput: React.FC<TimeInputProps> = ({ 
-  value, 
-  onChange, 
+const TimeInput: React.FC<TimeInputProps> = ({
+  value,
+  onChange,
   placeholder,
   minTime = '06:30',
   maxTime = '20:00'
 }) => {
   const [inputValue, setInputValue] = useState(value);
-
-  const timeToMinutes = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
 
   const formatTime = (input: string): string => {
     const numbers = input.replace(/\D/g, '');
@@ -100,8 +96,7 @@ const TimeInput: React.FC<TimeInputProps> = ({
       onBlur={handleBlur}
       placeholder=":"
       maxLength={5}
-      className="w-14 px-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-center text-black font-medium"
-      style={{ height: '24px', lineHeight: '24px' }}
+      className="w-14 h-6 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-gray-900 font-medium transition-all duration-150"
     />
   );
 }

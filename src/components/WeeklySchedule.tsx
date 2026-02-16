@@ -97,7 +97,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
         
         <button
           onClick={handleExportPDF}
-          className="flex items-center gap-2 px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Download className="w-5 h-5" />
           <span>Exporter PDF</span>
@@ -190,7 +190,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                         </td>
                       );
                     })}
-                    <td rowSpan={2} className="border-l-4 border-l-black text-center align-middle font-medium text-indigo-600 bg-white">
+                    <td rowSpan={2} className="border-l-4 border-l-black text-center align-middle font-medium text-blue-600 bg-white">
                       {weeklyTotal.toFixed(2)}h
                     </td>
                   </tr>
@@ -247,11 +247,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
               <td className="border-r-4 border-r-black p-2 font-bold">TOTAUX</td>
               <td className="border-r-4 border-r-black"></td>
               {days.map((day) => (
-                <td key={day} className="border-r-4 border-r-black text-center font-bold text-indigo-600">
+                <td key={day} className="border-r-4 border-r-black text-center font-bold text-blue-600">
                   {calculateDayTotal(schedules, day).toFixed(2)}h
                 </td>
               ))}
-              <td className="border-l-4 border-l-black text-center font-bold text-indigo-600">
+              <td className="border-l-4 border-l-black text-center font-bold text-blue-600">
                 {calculateGrandTotal(schedules).toFixed(2)}h
               </td>
             </tr>

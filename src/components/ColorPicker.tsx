@@ -35,9 +35,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
           <div key={color.name} className="flex flex-col items-center gap-1">
             <button
               onClick={() => onColorChange(color.name.toLowerCase())}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${
+              className={`w-8 h-8 rounded-full border-2 transition-all duration-150 ${
                 selectedColor === color.name.toLowerCase()
-                  ? 'ring-2 ring-offset-2 ring-indigo-500 scale-110'
+                  ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
                   : 'hover:scale-105'
               } ${color.bgClass} ${color.borderClass}`}
               title={color.name}
@@ -54,7 +54,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
                     handleLabelChange(color.name.toLowerCase(), e.currentTarget.value);
                   }
                 }}
-                className="w-20 text-xs px-1 py-0.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500"
+                className="w-20 text-xs px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                 autoFocus
               />
             ) : (
