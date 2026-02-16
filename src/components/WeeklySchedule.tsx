@@ -194,9 +194,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                       {weeklyTotal.toFixed(2)}h
                     </td>
                   </tr>
-                  <tr className={`group border-b-4 border-black hover:bg-gray-50 ${
-                    dragOverEmployeeIndex === index ? 'border-b-4 border-[#063971]' : ''
-                  } border-t border-gray-300`}>
+                  <tr className={`group border-b-4 border-b-black hover:bg-gray-50 ${
+                    dragOverEmployeeIndex === index ? 'border-b-4 border-b-[#063971]' : ''
+                  } border-t border-t-gray-300`}>
                     <td className="border-r-4 border-r-black text-center h-8 bg-white">
                       <span className="text-[0.85em] font-medium">Après-midi</span>
                     </td>
