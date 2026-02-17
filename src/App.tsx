@@ -27,7 +27,7 @@ function App() {
     }));
     return loadEmployeeOrder(initialEmployees);
   });
-  const { managedColors, saveColors } = useManagedColors();
+  const { managedColors, saveColors, autoSaveColors, lastAutoSave } = useManagedColors();
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const weekDates = getWeekDates(weekNumber, year);
 
@@ -295,6 +295,8 @@ function App() {
         onClose={() => setIsColorModalOpen(false)}
         managedColors={managedColors}
         onSave={saveColors}
+        onAutoSave={autoSaveColors}
+        lastAutoSave={lastAutoSave}
       />
     </div>
   );

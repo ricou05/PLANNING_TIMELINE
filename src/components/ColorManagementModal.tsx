@@ -1,25 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Pencil, Trash2, Plus, Save } from 'lucide-react';
 import { ManagedColor } from '../types';
-import { isLightColor, generateColorId } from '../utils/colorUtils';
+import { generateColorId } from '../utils/colorUtils';
 
 interface ColorManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   managedColors: ManagedColor[];
   onSave: (colors: ManagedColor[]) => void;
+  onAutoSave: (colors: ManagedColor[]) => void;
+  lastAutoSave: string | null;
 }
+
+const formatAutoSaveTime = (iso: string): string => {
+  const d = new Date(iso);
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  return `${day}/${month}/${year} a ${hours}h${minutes}`;
+};
 
 const ColorManagementModal: React.FC<ColorManagementModalProps> = ({
   isOpen,
   onClose,
   managedColors,
   onSave,
+  onAutoSave,
+  lastAutoSave,
 }) => {
   const [editColors, setEditColors] = useState<ManagedColor[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newHex, setNewHex] = useState('#3B82F6');
   const [newLabel, setNewLabel] = useState('');
+  const [showAutoSaveIndicator, setShowAutoSaveIndicator] = useState(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -27,25 +43,42 @@ const ColorManagementModal: React.FC<ColorManagementModalProps> = ({
       setEditingId(null);
       setNewHex('#3B82F6');
       setNewLabel('');
+      setShowAutoSaveIndicator(false);
     }
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
   }, [isOpen, managedColors]);
 
   if (!isOpen) return null;
 
+  const triggerAutoSave = (colors: ManagedColor[]) => {
+    onAutoSave(colors);
+    setShowAutoSaveIndicator(true);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => setShowAutoSaveIndicator(false), 2000);
+  };
+
   const handleRename = (id: string, label: string) => {
-    setEditColors(prev => prev.map(c => c.id === id ? { ...c, label } : c));
+    const updated = editColors.map(c => c.id === id ? { ...c, label } : c);
+    setEditColors(updated);
+    triggerAutoSave(updated);
     setEditingId(null);
   };
 
   const handleDelete = (id: string) => {
-    setEditColors(prev => prev.filter(c => c.id !== id));
+    const updated = editColors.filter(c => c.id !== id);
+    setEditColors(updated);
+    triggerAutoSave(updated);
   };
 
   const handleAdd = () => {
     const trimmed = newLabel.trim();
     if (!trimmed) return;
     const id = generateColorId(trimmed);
-    setEditColors(prev => [...prev, { id, hex: newHex, label: trimmed }]);
+    const updated = [...editColors, { id, hex: newHex, label: trimmed }];
+    setEditColors(updated);
+    triggerAutoSave(updated);
     setNewLabel('');
     setNewHex('#3B82F6');
   };
@@ -60,14 +93,32 @@ const ColorManagementModal: React.FC<ColorManagementModalProps> = ({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col animate-scaleIn">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Gestion des couleurs</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div className="px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Gestion des couleurs</h2>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="mt-2 flex items-center justify-between min-h-[24px]">
+            {lastAutoSave && (
+              <span className="text-xs text-gray-400">
+                Sauvegarde auto : {formatAutoSaveTime(lastAutoSave)}
+              </span>
+            )}
+
+            <div
+              className={`text-xs font-medium text-emerald-600 transition-opacity duration-300 ${
+                showAutoSaveIndicator ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              Modifications sauvegardees automatiquement
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
