@@ -35,8 +35,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
               title={color.label}
             />
             <span
-              className="w-20 text-xs px-1 py-0.5 text-gray-600 truncate text-center"
-              title={color.label}
+              className="text-xs px-1 py-0.5 text-gray-600 text-center whitespace-nowrap"
             >
               {color.label}
             </span>
