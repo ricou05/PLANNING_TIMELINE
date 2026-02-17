@@ -1,8 +1,8 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Employee, Schedule, ColorLabel } from '../types';
+import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateWeeklyHours, calculateDailyHours } from './scheduleCalculations';
-import { COLOR_OPTIONS } from './colorUtils';
+import { findManagedColor, getTextColorForHex } from './colorUtils';
 
 interface ExportToPDFParams {
   employees: Employee[];
@@ -11,21 +11,17 @@ interface ExportToPDFParams {
   schedules: Record<string, Schedule>;
   weekNumber: number;
   year: number;
-  colorLabels: ColorLabel[];
+  managedColors: ManagedColor[];
 }
 
-const getColorHex = (colorName?: string): string | null => {
-  if (!colorName) return null;
-  const option = COLOR_OPTIONS.find(c => c.name.toLowerCase() === colorName);
-  if (!option) return null;
-  const match = option.bgClass.match(/#[0-9A-Fa-f]{6}/);
-  return match ? match[0] : null;
+const getColorHex = (managedColors: ManagedColor[], colorName?: string): string | null => {
+  const mc = findManagedColor(managedColors, colorName);
+  return mc ? mc.hex : null;
 };
 
-const getTextColorForBg = (colorName?: string): string => {
-  if (!colorName) return '#000000';
-  const option = COLOR_OPTIONS.find(c => c.name.toLowerCase() === colorName);
-  return option?.textClass.includes('white') ? '#FFFFFF' : '#000000';
+const getTextColor = (managedColors: ManagedColor[], colorName?: string): string => {
+  const mc = findManagedColor(managedColors, colorName);
+  return mc ? getTextColorForHex(mc.hex) : '#000000';
 };
 
 const formatHours = (hours: number): string => {
@@ -41,7 +37,7 @@ const createPDFTable = ({
   schedules,
   weekNumber,
   year,
-  colorLabels
+  managedColors
 }: ExportToPDFParams): HTMLElement => {
   const container = document.createElement('div');
   container.style.cssText = 'padding:24px 32px;background:#fff;width:1120px;font-family:Arial,Helvetica,sans-serif;';
@@ -61,12 +57,12 @@ const createPDFTable = ({
 
   const thEmployee = document.createElement('th');
   thEmployee.style.cssText = thStyle + 'width:100px;text-align:left;';
-  thEmployee.textContent = 'Employé';
+  thEmployee.textContent = 'Employe';
   headerRow.appendChild(thEmployee);
 
   const thPeriod = document.createElement('th');
   thPeriod.style.cssText = thStyle + 'width:60px;';
-  thPeriod.textContent = 'Période';
+  thPeriod.textContent = 'Periode';
   headerRow.appendChild(thPeriod);
 
   days.forEach((day, i) => {
@@ -111,10 +107,10 @@ const createPDFTable = ({
 
       if (schedule.morningStart && schedule.morningEnd) {
         td.textContent = `${schedule.morningStart} - ${schedule.morningEnd}`;
-        const hex = getColorHex(schedule.morningColor);
+        const hex = getColorHex(managedColors, schedule.morningColor);
         if (hex) {
           td.style.backgroundColor = hex;
-          td.style.color = getTextColorForBg(schedule.morningColor);
+          td.style.color = getTextColor(managedColors, schedule.morningColor);
           td.style.fontWeight = '500';
         }
       }
@@ -131,7 +127,7 @@ const createPDFTable = ({
 
     const aLabel = document.createElement('td');
     aLabel.style.cssText = cellStyle + 'font-size:8px;color:#6b7280;' + bgColor;
-    aLabel.textContent = 'Après-midi';
+    aLabel.textContent = 'Apres-midi';
     afternoonRow.appendChild(aLabel);
 
     days.forEach(day => {
@@ -141,10 +137,10 @@ const createPDFTable = ({
 
       if (schedule.afternoonStart && schedule.afternoonEnd) {
         td.textContent = `${schedule.afternoonStart} - ${schedule.afternoonEnd}`;
-        const hex = getColorHex(schedule.afternoonColor);
+        const hex = getColorHex(managedColors, schedule.afternoonColor);
         if (hex) {
           td.style.backgroundColor = hex;
-          td.style.color = getTextColorForBg(schedule.afternoonColor);
+          td.style.color = getTextColor(managedColors, schedule.afternoonColor);
           td.style.fontWeight = '500';
         }
       }
@@ -187,23 +183,21 @@ const createPDFTable = ({
   table.appendChild(tbody);
   container.appendChild(table);
 
-  if (colorLabels.length > 0) {
+  if (managedColors.length > 0) {
     const legend = document.createElement('div');
     legend.style.cssText = 'margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:9px;';
 
-    colorLabels.forEach(cl => {
-      if (!cl.label) return;
+    managedColors.forEach(mc => {
       const item = document.createElement('div');
       item.style.cssText = 'display:flex;align-items:center;gap:4px;';
 
       const swatch = document.createElement('span');
-      const hex = getColorHex(cl.color);
-      swatch.style.cssText = `width:12px;height:12px;border-radius:50%;border:1px solid #d1d5db;display:inline-block;${hex ? 'background:' + hex + ';' : ''}`;
+      swatch.style.cssText = `width:12px;height:12px;border-radius:50%;border:1px solid #d1d5db;display:inline-block;background:${mc.hex};`;
       item.appendChild(swatch);
 
       const label = document.createElement('span');
       label.style.cssText = 'color:#374151;';
-      label.textContent = cl.label;
+      label.textContent = mc.label;
       item.appendChild(label);
 
       legend.appendChild(item);

@@ -1,59 +1,32 @@
-import { RAL_COLORS } from './colors';
+import { ManagedColor } from '../types';
 
-export interface ColorOption {
-  name: string;
-  bgClass: string;
-  borderClass: string;
-  textClass: string;
-}
-
-export const COLOR_OPTIONS: ColorOption[] = [
-  { 
-    name: 'Jaune',
-    bgClass: 'bg-[#F4C300]',
-    borderClass: 'border-[#F4C300]',
-    textClass: 'text-black'
-  },
-  { 
-    name: 'Rouge',
-    bgClass: 'bg-[#CC0605]',
-    borderClass: 'border-[#CC0605]',
-    textClass: 'text-white'
-  },
-  { 
-    name: 'Bleu',
-    bgClass: 'bg-[#063971]',
-    borderClass: 'border-[#063971]',
-    textClass: 'text-white'
-  },
-  { 
-    name: 'Vert',
-    bgClass: 'bg-[#317F43]',
-    borderClass: 'border-[#317F43]',
-    textClass: 'text-white'
-  },
-  { 
-    name: 'Bleu Ciel',
-    bgClass: 'bg-[#87CEEB]',
-    borderClass: 'border-[#87CEEB]',
-    textClass: 'text-black'
-  },
-  { 
-    name: 'Orange',
-    bgClass: 'bg-[#FF7F00]',
-    borderClass: 'border-[#FF7F00]',
-    textClass: 'text-white'
-  },
-  { 
-    name: 'Violet',
-    bgClass: 'bg-[#A03472]',
-    borderClass: 'border-[#A03472]',
-    textClass: 'text-white'
-  }
+export const DEFAULT_MANAGED_COLORS: ManagedColor[] = [
+  { id: 'jaune', hex: '#F4C300', label: 'Journée complète' },
+  { id: 'rouge', hex: '#CC0605', label: 'Absent' },
+  { id: 'bleu', hex: '#063971', label: 'Poste Matin' },
+  { id: 'vert', hex: '#317F43', label: 'Poste Après-midi' },
+  { id: 'bleu ciel', hex: '#87CEEB', label: 'Formation' },
+  { id: 'orange', hex: '#FF7F00', label: 'Congé' },
+  { id: 'violet', hex: '#A03472', label: 'Télétravail' },
 ];
 
-export const getColorClasses = (color?: string): string => {
-  if (!color) return '';
-  const colorOption = COLOR_OPTIONS.find(c => c.name.toLowerCase() === color.toLowerCase());
-  return colorOption ? `${colorOption.bgClass} ${colorOption.borderClass} ${colorOption.textClass}` : '';
+export const isLightColor = (hex: string): boolean => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5;
+};
+
+export const getTextColorForHex = (hex: string): string => {
+  return isLightColor(hex) ? '#000000' : '#FFFFFF';
+};
+
+export const findManagedColor = (colors: ManagedColor[], colorId?: string): ManagedColor | undefined => {
+  if (!colorId) return undefined;
+  return colors.find(c => c.id === colorId);
+};
+
+export const generateColorId = (label: string): string => {
+  return label.toLowerCase().trim().replace(/\s+/g, '-') + '-' + Date.now().toString(36);
 };

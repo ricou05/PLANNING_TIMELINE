@@ -1,25 +1,24 @@
 import React from 'react';
-import { ColorLabel } from '../types';
-import { COLOR_OPTIONS } from '../utils/colorUtils';
+import { ManagedColor } from '../types';
 
 interface ColorLegendsProps {
-  colorLabels: ColorLabel[];
+  managedColors: ManagedColor[];
 }
 
-const ColorLegends: React.FC<ColorLegendsProps> = ({ colorLabels }) => {
+const ColorLegends: React.FC<ColorLegendsProps> = ({ managedColors }) => {
+  if (managedColors.length === 0) return null;
+
   return (
-    <div className="flex flex-wrap gap-4 p-4">
-      {colorLabels.map((label) => {
-        const colorOption = COLOR_OPTIONS.find(c => c.name.toLowerCase() === label.color.toLowerCase());
-        if (!colorOption) return null;
-        
-        return (
-          <div key={label.color} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded ${colorOption.bgClass} ${colorOption.borderClass}`} />
-            <span className="text-sm font-medium text-gray-700">{label.label}</span>
-          </div>
-        );
-      })}
+    <div className="flex flex-wrap gap-4 px-4 py-2">
+      {managedColors.map((color) => (
+        <div key={color.id} className="flex items-center gap-2">
+          <div
+            className="w-3.5 h-3.5 rounded-full border border-gray-200 shadow-sm"
+            style={{ backgroundColor: color.hex }}
+          />
+          <span className="text-sm font-medium text-gray-600">{color.label}</span>
+        </div>
+      ))}
     </div>
   );
 };

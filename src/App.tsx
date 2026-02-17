@@ -5,9 +5,11 @@ import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
 import FileMenu from './components/FileMenu/FileMenu';
 import CSVImport from './components/CSVImport';
-import { Employee, Schedule, ColorLabel, SavedSchedule } from './types';
+import ColorManagementModal from './components/ColorManagementModal';
+import { Employee, Schedule, SavedSchedule } from './types';
 import { getCurrentWeekNumber, getWeekDates, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
+import { useManagedColors } from './hooks/useManagedColors';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -21,11 +23,12 @@ function App() {
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const initialEmployees = Array.from({ length: employeeCount }, (_, index) => ({
       id: index + 1,
-      name: `Employé ${index + 1}`,
+      name: `Employe ${index + 1}`,
     }));
     return loadEmployeeOrder(initialEmployees);
   });
-  const [colorLabels, setColorLabels] = useState<ColorLabel[]>([]);
+  const { managedColors, saveColors } = useManagedColors();
+  const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const weekDates = getWeekDates(weekNumber, year);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,7 +51,7 @@ function App() {
       setEmployeeCount(value);
       const newEmployees = Array.from({ length: value }, (_, index) => ({
         id: index + 1,
-        name: `Employé ${index + 1}`,
+        name: `Employe ${index + 1}`,
       }));
       setEmployees(loadEmployeeOrder(newEmployees));
     }
@@ -66,7 +69,7 @@ function App() {
 
   const handleEmployeeNameChange = (id: number, newName: string) => {
     setEmployees(prev => {
-      const newEmployees = prev.map(emp => 
+      const newEmployees = prev.map(emp =>
         emp.id === id ? { ...emp, name: newName } : emp
       );
       return newEmployees;
@@ -79,15 +82,12 @@ function App() {
   };
 
   const handleEmployeeDelete = (id: number) => {
-    // Confirmation avant suppression
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer cet employé ?`)) {
+    if (!window.confirm(`Etes-vous sur de vouloir supprimer cet employe ?`)) {
       return;
     }
 
-    // Supprimer l'employé de la liste
     setEmployees(prev => prev.filter(emp => emp.id !== id));
 
-    // Supprimer les horaires associés à cet employé
     setSchedules(prev => {
       const newSchedules = { ...prev };
       Object.keys(newSchedules).forEach(key => {
@@ -108,17 +108,18 @@ function App() {
   };
 
   const handleNewSchedule = () => {
-    if (window.confirm("Êtes-vous sûr de vouloir créer un nouveau planning vide ? Toutes les données non sauvegardées seront perdues.")) {
+    if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees seront perdues.")) {
       setSchedules({});
       setEmployees(Array.from({ length: employeeCount }, (_, index) => ({
         id: index + 1,
-        name: `Employé ${index + 1}`,
+        name: `Employe ${index + 1}`,
       })));
       setWeekNumber(getCurrentWeekNumber());
       setYear(currentYear);
-      setColorLabels([]);
     }
   };
+
+  const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
     if (activeTab === 'weekly') {
@@ -134,18 +135,8 @@ function App() {
           onEmployeeNameChange={handleEmployeeNameChange}
           onEmployeeReorder={handleEmployeeReorder}
           onEmployeeDelete={handleEmployeeDelete}
-          colorLabels={colorLabels}
-          onColorLabelChange={(label) => {
-            setColorLabels(prev => {
-              const index = prev.findIndex(l => l.color === label.color);
-              if (index >= 0) {
-                const newLabels = [...prev];
-                newLabels[index] = label;
-                return newLabels;
-              }
-              return [...prev, label];
-            });
-          }}
+          managedColors={managedColors}
+          onManageColorsClick={() => setIsColorModalOpen(true)}
         />
       );
     } else if (activeTab === 'excel') {
@@ -171,18 +162,11 @@ function App() {
           onEmployeeNameChange={handleEmployeeNameChange}
           onEmployeeReorder={handleEmployeeReorder}
           onEmployeeDelete={handleEmployeeDelete}
-          colorLabels={colorLabels}
-          onColorLabelChange={(label) => {
-            setColorLabels(prev => {
-              const index = prev.findIndex(l => l.color === label.color);
-              if (index >= 0) {
-                const newLabels = [...prev];
-                newLabels[index] = label;
-                return newLabels;
-              }
-              return [...prev, label];
-            });
-          }}
+          managedColors={managedColors}
+          onManageColorsClick={() => setIsColorModalOpen(true)}
+          weekNumber={weekNumber}
+          year={year}
+          dates={weekDates.map(formatDate)}
         />
       );
     }
@@ -196,14 +180,13 @@ function App() {
           setEmployees(savedSchedule.employees);
           setWeekNumber(savedSchedule.weekNumber);
           setYear(savedSchedule.year);
-          setColorLabels(savedSchedule.colorLabels || []);
         }}
         onSave={async () => ({
           schedules,
           employees,
           weekNumber,
           year,
-          colorLabels
+          colorLabels: colorLabelsForSave
         })}
         onNewSchedule={handleNewSchedule}
       />
@@ -213,7 +196,7 @@ function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="year" className="text-sm font-medium text-gray-700">
-                Année
+                Annee
               </label>
               <input
                 id="year"
@@ -227,7 +210,7 @@ function App() {
             </div>
             <div className="flex items-center gap-2">
               <label htmlFor="weekNumber" className="text-sm font-medium text-gray-700">
-                Semaine N°
+                Semaine N
               </label>
               <input
                 id="weekNumber"
@@ -241,7 +224,7 @@ function App() {
             </div>
             <div className="flex items-center gap-2">
               <label htmlFor="employeeCount" className="text-sm font-medium text-gray-700">
-                Nombre d'employés:
+                Nombre d'employes:
               </label>
               <input
                 id="employeeCount"
@@ -254,7 +237,7 @@ function App() {
               />
             </div>
           </div>
-          
+
           <CSVImport onImport={handleCSVImport} existingEmployees={employees} />
         </div>
 
@@ -301,11 +284,18 @@ function App() {
             </button>
           ))}
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-xl overflow-hidden animate-scaleIn">
           {renderContent()}
         </div>
       </main>
+
+      <ColorManagementModal
+        isOpen={isColorModalOpen}
+        onClose={() => setIsColorModalOpen(false)}
+        managedColors={managedColors}
+        onSave={saveColors}
+      />
     </div>
   );
 }

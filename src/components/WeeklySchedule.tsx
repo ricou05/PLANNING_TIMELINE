@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Download } from 'lucide-react';
 import TimeInput from './TimeInput';
-import { Employee, Schedule, ColorLabel } from '../types';
+import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
 import ColorLegends from './ColorLegends';
 import DraggableEmployeeList from './DraggableEmployeeList';
-import { COLOR_OPTIONS } from '../utils/colorUtils';
+import { findManagedColor } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
 import { exportToPDF } from '../utils/pdfExport';
@@ -21,8 +21,8 @@ interface WeeklyScheduleProps {
   onEmployeeNameChange: (id: number, newName: string) => void;
   onEmployeeReorder: (reorderedEmployees: Employee[]) => void;
   onEmployeeDelete: (id: number) => void;
-  colorLabels: ColorLabel[];
-  onColorLabelChange: (colorLabel: ColorLabel) => void;
+  managedColors: ManagedColor[];
+  onManageColorsClick: () => void;
 }
 
 const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
@@ -36,8 +36,8 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onEmployeeNameChange,
   onEmployeeReorder,
   onEmployeeDelete,
-  colorLabels,
-  onColorLabelChange
+  managedColors,
+  onManageColorsClick,
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
@@ -51,11 +51,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
         schedules,
         weekNumber,
         year,
-        colorLabels
+        managedColors,
       });
     } catch (error) {
       console.error('Erreur lors de l\'export PDF:', error);
-      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+      alert('Erreur lors de la generation du PDF. Veuillez reessayer.');
     }
   };
 
@@ -72,29 +72,27 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     setDragOverEmployeeIndex(null);
   };
 
-  const getCellStyle = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): string => {
-    if (!schedule) return '';
-    
+  const getCellStyle = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): React.CSSProperties => {
+    if (!schedule) return {};
     const start = schedule[`${period}Start`];
     const end = schedule[`${period}End`];
     const color = schedule[`${period}Color`];
-    
-    if (!start || !end) return '';
-    
-    const colorOption = color ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === color) : null;
-    return colorOption?.bgClass || '';
+    if (!start || !end || !color) return {};
+    const mc = findManagedColor(managedColors, color);
+    if (!mc) return {};
+    return { backgroundColor: mc.hex };
   };
 
   return (
     <div className="space-y-4">
       <div className="px-4 flex justify-between items-center">
-        <ColorPicker 
-          selectedColor={selectedColor} 
+        <ColorPicker
+          selectedColor={selectedColor}
           onColorChange={setSelectedColor}
-          colorLabels={colorLabels}
-          onColorLabelChange={onColorLabelChange}
+          managedColors={managedColors}
+          onManageClick={onManageColorsClick}
         />
-        
+
         <button
           onClick={handleExportPDF}
           className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
@@ -103,15 +101,15 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <span>Exporter PDF</span>
         </button>
       </div>
-      
-      <ColorLegends colorLabels={colorLabels} />
+
+      <ColorLegends managedColors={managedColors} />
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-gray-50">
-              <th className="border-b-4 border-black p-2 w-[120px] font-bold border-r-4 border-r-black">EMPLOYÉ</th>
-              <th className="border-b-4 border-black p-2 w-[80px] font-bold border-r-4 border-r-black">PÉRIODE</th>
+              <th className="border-b-4 border-black p-2 w-[120px] font-bold border-r-4 border-r-black">EMPLOYE</th>
+              <th className="border-b-4 border-black p-2 w-[80px] font-bold border-r-4 border-r-black">PERIODE</th>
               {days.map((day, index) => (
                 <th key={day} className="border-b-4 border-black p-2 border-r-4 border-r-black">
                   <div className="text-center">
@@ -126,7 +124,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <tbody>
             {employees.map((employee, index) => {
               const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
-              
+
               return (
                 <React.Fragment key={employee.id}>
                   <tr className={`group hover:bg-gray-50 ${
@@ -154,11 +152,12 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                     {days.map((day) => {
                       const schedule = schedules[`${employee.id}-${day}`] || {};
                       const cellStyle = getCellStyle(schedule, 'morning');
-                      
+
                       return (
-                        <td 
-                          key={`${employee.id}-${day}-morning`} 
-                          className={`border-r-4 border-r-black h-8 ${cellStyle}`}
+                        <td
+                          key={`${employee.id}-${day}-morning`}
+                          className="border-r-4 border-r-black h-8"
+                          style={cellStyle}
                         >
                           <div className="flex gap-1 items-center justify-center">
                             <TimeInput
@@ -198,16 +197,17 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                     dragOverEmployeeIndex === index ? 'border-b-4 border-b-[#063971]' : ''
                   } border-t border-t-gray-300`}>
                     <td className="border-r-4 border-r-black text-center h-8 bg-white">
-                      <span className="text-[0.85em] font-medium">Après-midi</span>
+                      <span className="text-[0.85em] font-medium">Apres-midi</span>
                     </td>
                     {days.map((day) => {
                       const schedule = schedules[`${employee.id}-${day}`] || {};
                       const cellStyle = getCellStyle(schedule, 'afternoon');
-                      
+
                       return (
-                        <td 
-                          key={`${employee.id}-${day}-afternoon`} 
-                          className={`border-r-4 border-r-black h-8 ${cellStyle}`}
+                        <td
+                          key={`${employee.id}-${day}-afternoon`}
+                          className="border-r-4 border-r-black h-8"
+                          style={cellStyle}
                         >
                           <div className="flex gap-1 items-center justify-center">
                             <TimeInput

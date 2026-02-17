@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Employee, Schedule, ColorLabel } from '../types';
+import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
-import { COLOR_OPTIONS } from '../utils/colorUtils';
+import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
@@ -16,8 +16,8 @@ interface TimelineViewProps {
   onEmployeeNameChange: (id: number, newName: string) => void;
   onEmployeeReorder: (reorderedEmployees: Employee[]) => void;
   onEmployeeDelete: (id: number) => void;
-  colorLabels: ColorLabel[];
-  onColorLabelChange: (colorLabel: ColorLabel) => void;
+  managedColors: ManagedColor[];
+  onManageColorsClick: () => void;
   weekNumber: number;
   year: number;
   dates: string[];
@@ -38,8 +38,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onEmployeeNameChange,
   onEmployeeReorder,
   onEmployeeDelete,
-  colorLabels,
-  onColorLabelChange,
+  managedColors,
+  onManageColorsClick,
   weekNumber,
   year,
   dates
@@ -63,6 +63,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
 
+  const getColorStyle = (colorId?: string): { bg: string; border: string; text: string } => {
+    const mc = findManagedColor(managedColors, colorId);
+    if (!mc) return { bg: '', border: '', text: '' };
+    return {
+      bg: mc.hex,
+      border: mc.hex,
+      text: getTextColorForHex(mc.hex),
+    };
+  };
+
   const handleEmployeeDragStart = (index: number) => {
     setDraggedEmployeeIndex(index);
   };
@@ -74,7 +84,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     const newEmployees = [...employees];
     const [draggedEmployee] = newEmployees.splice(draggedEmployeeIndex, 1);
     newEmployees.splice(index, 0, draggedEmployee);
-    
+
     onEmployeeReorder(newEmployees);
     setDraggedEmployeeIndex(index);
   };
@@ -116,7 +126,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handlePeriodClick = (e: React.MouseEvent, employeeId: number, period: 'morning' | 'afternoon') => {
     e.stopPropagation();
     if (!isResizing && !isDragging) {
-      const schedule = schedules[`${employeeId}-${day}`] || {};
       onScheduleChange(employeeId, day, `${period}Color`, selectedColor);
     }
   };
@@ -159,7 +168,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     const position = snapToGrid(getPositionFromEvent(e));
     const time = getTimeFromPosition(position);
     const periodType = getPeriodType(time);
-    
+
     const schedule = schedules[`${employeeId}-${day}`] || {};
     const hasMorning = schedule.morningStart && schedule.morningEnd;
     const hasAfternoon = schedule.afternoonStart && schedule.afternoonEnd;
@@ -180,9 +189,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
   const handleTimelineMouseMove = (e: React.MouseEvent) => {
     if (!isDragging && !isResizing) return;
-    
+
     const currentPosition = getPositionFromEvent(e);
-    
+
     if (isCreating) {
       setDragEnd(snapToGrid(currentPosition));
     } else if (isDragging && !isResizing && dragStart !== null && dragEnd !== null) {
@@ -255,15 +264,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="px-4">
-        <ColorPicker 
-          selectedColor={selectedColor} 
+        <ColorPicker
+          selectedColor={selectedColor}
           onColorChange={setSelectedColor}
-          colorLabels={colorLabels}
-          onColorLabelChange={onColorLabelChange}
+          managedColors={managedColors}
+          onManageClick={onManageColorsClick}
         />
       </div>
-      
-      <div 
+
+      <div
         className="overflow-x-auto"
         ref={timelineRef}
         onMouseMove={handleTimelineMouseMove}
@@ -306,7 +315,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
               const schedule = schedules[`${employee.id}-${day}`] || {};
               const dailyHours = calculateDailyHours(schedule);
               const weeklyHours = calculateWeeklyHours(schedules, employee.id);
-              
+              const morningStyle = getColorStyle(schedule.morningColor);
+              const afternoonStyle = getColorStyle(schedule.afternoonColor);
+
               return (
                 <div key={employee.id} className="flex border-b border-gray-200">
                   <DraggableEmployeeList
@@ -319,27 +330,29 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     columnWidth={COLUMN_WIDTH.employee}
                     onDelete={onEmployeeDelete}
                   />
-                  <div 
+                  <div
                     className="relative flex-grow h-9"
                     style={{ width: timelineWidth }}
                     onMouseDown={(e) => handleTimelineMouseDown(e, employee.id)}
                   >
                     {schedule.morningStart && schedule.morningEnd && (
                       <div
-                        className={`absolute h-7 top-1 border rounded cursor-move group
-                          ${schedule.morningColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.morningColor)?.bgClass : 'bg-blue-100'}
-                          ${schedule.morningColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.morningColor)?.borderClass : 'border-blue-200'}`}
+                        className="absolute h-7 top-1 border rounded cursor-move group"
                         style={{
                           left: calculatePosition(schedule.morningStart),
                           width: calculateWidth(schedule.morningStart, schedule.morningEnd),
+                          backgroundColor: morningStyle.bg || '#DBEAFE',
+                          borderColor: morningStyle.border || '#BFDBFE',
                         }}
                         onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'morning')}
                         onClick={(e) => handlePeriodClick(e, employee.id, 'morning')}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
                         <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
-                        <span className={`text-xs px-2 leading-[28px] whitespace-nowrap
-                          ${schedule.morningColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.morningColor)?.textClass : 'text-blue-800'}`}>
+                        <span
+                          className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                          style={{ color: morningStyle.text || '#1E3A8A' }}
+                        >
                           {schedule.morningStart} - {schedule.morningEnd}
                         </span>
                         <button
@@ -353,20 +366,22 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
                     {schedule.afternoonStart && schedule.afternoonEnd && (
                       <div
-                        className={`absolute h-7 top-1 border rounded cursor-move group
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.bgClass : 'bg-gray-100'}
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.borderClass : 'border-gray-300'}`}
+                        className="absolute h-7 top-1 border rounded cursor-move group"
                         style={{
                           left: calculatePosition(schedule.afternoonStart),
                           width: calculateWidth(schedule.afternoonStart, schedule.afternoonEnd),
+                          backgroundColor: afternoonStyle.bg || '#F3F4F6',
+                          borderColor: afternoonStyle.border || '#D1D5DB',
                         }}
                         onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'afternoon')}
                         onClick={(e) => handlePeriodClick(e, employee.id, 'afternoon')}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
                         <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
-                        <span className={`text-xs px-2 leading-[28px] whitespace-nowrap
-                          ${schedule.afternoonColor ? COLOR_OPTIONS.find(c => c.name.toLowerCase() === schedule.afternoonColor)?.textClass : 'text-gray-700'}`}>
+                        <span
+                          className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                          style={{ color: afternoonStyle.text || '#374151' }}
+                        >
                           {schedule.afternoonStart} - {schedule.afternoonEnd}
                         </span>
                         <button

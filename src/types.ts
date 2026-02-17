@@ -19,6 +19,12 @@ export interface ColorLabel {
   label: string;
 }
 
+export interface ManagedColor {
+  id: string;
+  hex: string;
+  label: string;
+}
+
 export interface SavedSchedule {
   id: string;
   name: string;
