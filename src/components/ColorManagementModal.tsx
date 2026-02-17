@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Pencil, Trash2, Plus, Save } from 'lucide-react';
+import { X, Pencil, Trash2, Plus, Save, Check } from 'lucide-react';
 import { ManagedColor } from '../types';
 import { generateColorId } from '../utils/colorUtils';
 
@@ -104,18 +104,22 @@ const ColorManagementModal: React.FC<ColorManagementModalProps> = ({
             </button>
           </div>
 
-          <div className="mt-2 flex items-center justify-between min-h-[24px]">
+          <div className="mt-2 flex items-center justify-between min-h-[28px] gap-2">
             {lastAutoSave && (
-              <span className="text-xs text-gray-400">
+              <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">
+                <Save className="w-3 h-3" />
                 Sauvegarde auto : {formatAutoSaveTime(lastAutoSave)}
               </span>
             )}
 
             <div
-              className={`text-xs font-medium text-emerald-600 transition-opacity duration-300 ${
-                showAutoSaveIndicator ? 'opacity-100' : 'opacity-0'
+              className={`inline-flex items-center gap-1 text-xs font-semibold transition-all duration-300 ${
+                showAutoSaveIndicator
+                  ? 'opacity-100 translate-y-0 text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1'
+                  : 'opacity-0 translate-y-1'
               }`}
             >
+              <Check className="w-3.5 h-3.5" />
               Modifications sauvegardees automatiquement
             </div>
           </div>
