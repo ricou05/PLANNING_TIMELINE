@@ -16,9 +16,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
   onManageClick,
 }) => {
   return (
-    <div className="flex items-start gap-4">
+    <div className="flex items-start gap-4 overflow-visible">
       <span className="text-sm font-medium text-gray-700 mt-2">Couleur:</span>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-4 p-1 overflow-visible">
         {managedColors.map((color) => (
           <div key={color.id} className="flex flex-col items-center gap-1">
             <button
