@@ -10,18 +10,22 @@ import { Employee, Schedule, SavedSchedule } from './types';
 import { getCurrentWeekNumber, getWeekDates, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
+import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
+const autoSaved = loadScheduleAutoSave();
+
 function App() {
   const currentYear = new Date().getFullYear();
-  const [schedules, setSchedules] = useState<Record<string, Schedule>>({});
+  const [schedules, setSchedules] = useState<Record<string, Schedule>>(autoSaved?.schedules || {});
   const [activeTab, setActiveTab] = useState<'weekly' | 'excel' | string>('weekly');
-  const [weekNumber, setWeekNumber] = useState(getCurrentWeekNumber());
-  const [year, setYear] = useState(currentYear);
-  const [employeeCount, setEmployeeCount] = useState(10);
+  const [weekNumber, setWeekNumber] = useState(autoSaved?.weekNumber || getCurrentWeekNumber());
+  const [year, setYear] = useState(autoSaved?.year || currentYear);
+  const [employeeCount, setEmployeeCount] = useState(autoSaved?.employees?.length || 10);
   const [employees, setEmployees] = useState<Employee[]>(() => {
-    const initialEmployees = Array.from({ length: employeeCount }, (_, index) => ({
+    if (autoSaved?.employees?.length) return autoSaved.employees;
+    const initialEmployees = Array.from({ length: 10 }, (_, index) => ({
       id: index + 1,
       name: `Employe ${index + 1}`,
     }));
@@ -30,6 +34,7 @@ function App() {
   const { managedColors, saveColors, autoSaveColors, lastAutoSave } = useManagedColors();
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const weekDates = getWeekDates(weekNumber, year);
+  const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
@@ -189,6 +194,8 @@ function App() {
           colorLabels: colorLabelsForSave
         })}
         onNewSchedule={handleNewSchedule}
+        autoSaveTimestamp={scheduleAutoSave.lastAutoSave}
+        showAutoSaveIndicator={scheduleAutoSave.showIndicator}
       />
 
       <main className="pt-20 max-w-[95%] mx-auto pb-8 animate-fadeIn">
