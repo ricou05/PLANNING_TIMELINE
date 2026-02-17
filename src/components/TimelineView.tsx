@@ -6,7 +6,8 @@ import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
-import { X } from 'lucide-react';
+import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
+import { X, FileDown } from 'lucide-react';
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -44,10 +45,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   year,
   dates
 }) => {
+  const DAYS_LIST = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  const dayIndex = DAYS_LIST.indexOf(day);
+  const currentDate = dayIndex >= 0 && dayIndex < dates.length ? dates[dayIndex] : '';
+
   const [selectedColor, setSelectedColor] = useState('bleu');
   const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | null>(null);
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [dragEnd, setDragEnd] = useState<number | null>(null);
@@ -261,15 +267,42 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     onScheduleChange(employeeId, day, `${period}Color`, '');
   };
 
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      await exportTimelineToPDF({
+        employees,
+        day,
+        date: currentDate,
+        schedules,
+        weekNumber,
+        year,
+        managedColors,
+      });
+    } catch {
+      // silent
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="px-4">
+      <div className="px-4 flex items-center justify-between">
         <ColorPicker
           selectedColor={selectedColor}
           onColorChange={setSelectedColor}
           managedColors={managedColors}
           onManageClick={onManageColorsClick}
         />
+        <button
+          onClick={handleExportPDF}
+          disabled={isExporting}
+          className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <FileDown className="w-4 h-4" />
+          {isExporting ? 'Export en cours...' : `Exporter ${day} en PDF`}
+        </button>
       </div>
 
       <div
