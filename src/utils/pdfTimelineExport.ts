@@ -206,9 +206,8 @@ export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Prom
 
     document.body.removeChild(container);
 
-    const isPortrait = params.employees.length > 12;
     const pdf = new jsPDF({
-      orientation: isPortrait ? 'portrait' : 'landscape',
+      orientation: 'landscape',
       unit: 'mm',
       format: 'a4',
     });
