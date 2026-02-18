@@ -1,13 +1,13 @@
 import { ManagedColor } from '../types';
 
 export const DEFAULT_MANAGED_COLORS: ManagedColor[] = [
-  { id: 'jaune', hex: '#F4C300', label: 'Journée complète' },
-  { id: 'rouge', hex: '#CC0605', label: 'Absent' },
-  { id: 'bleu', hex: '#063971', label: 'Poste Matin' },
-  { id: 'vert', hex: '#317F43', label: 'Poste Après-midi' },
-  { id: 'bleu ciel', hex: '#87CEEB', label: 'Formation' },
-  { id: 'orange', hex: '#FF7F00', label: 'Congé' },
-  { id: 'violet', hex: '#A03472', label: 'Télétravail' },
+  { id: 'jaune', hex: '#F4C300', label: 'St Pierre' },
+  { id: 'rouge', hex: '#CC0605', label: 'Boucherie' },
+  { id: 'bleu', hex: '#063971', label: 'ELS' },
+  { id: 'vert', hex: '#317F43', label: 'F&L' },
+  { id: 'bleu ciel', hex: '#87CEEB', label: 'Caisse 1' },
+  { id: 'orange', hex: '#FF7F00', label: 'Caisse 2' },
+  { id: 'violet', hex: '#A03472', label: 'Caisse 3' },
 ];
 
 export const isLightColor = (hex: string): boolean => {
