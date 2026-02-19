@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Clock, Calendar, FileSpreadsheet } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import TimelineView from './components/TimelineView';
@@ -33,6 +33,8 @@ function App() {
   });
   const { managedColors, saveColors, autoSaveColors, lastAutoSave } = useManagedColors();
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
+  const [copiedDay, setCopiedDay] = useState<string | null>(null);
+  const [copiedDaySchedules, setCopiedDaySchedules] = useState<Record<string, Schedule> | null>(null);
   const weekDates = getWeekDates(weekNumber, year);
   const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year);
 
@@ -112,6 +114,36 @@ function App() {
     }));
   };
 
+  const handleCopyDay = useCallback((day: string) => {
+    const daySchedules: Record<string, Schedule> = {};
+    employees.forEach(emp => {
+      const key = `${emp.id}-${day}`;
+      if (schedules[key]) {
+        daySchedules[key] = { ...schedules[key] };
+      }
+    });
+    setCopiedDay(day);
+    setCopiedDaySchedules(daySchedules);
+  }, [employees, schedules]);
+
+  const handlePasteDay = useCallback((targetDay: string) => {
+    if (!copiedDay || !copiedDaySchedules) return;
+    setSchedules(prev => {
+      const updated = { ...prev };
+      employees.forEach(emp => {
+        const sourceKey = `${emp.id}-${copiedDay}`;
+        const targetKey = `${emp.id}-${targetDay}`;
+        const source = copiedDaySchedules[sourceKey];
+        if (source) {
+          updated[targetKey] = { ...source };
+        } else {
+          delete updated[targetKey];
+        }
+      });
+      return updated;
+    });
+  }, [copiedDay, copiedDaySchedules, employees]);
+
   const handleNewSchedule = () => {
     if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees seront perdues.")) {
       setSchedules({});
@@ -142,6 +174,9 @@ function App() {
           onEmployeeDelete={handleEmployeeDelete}
           managedColors={managedColors}
           onManageColorsClick={() => setIsColorModalOpen(true)}
+          copiedDay={copiedDay}
+          onCopyDay={handleCopyDay}
+          onPasteDay={handlePasteDay}
         />
       );
     } else if (activeTab === 'excel') {

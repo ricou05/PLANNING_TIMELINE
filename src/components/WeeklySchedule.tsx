@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Copy, ClipboardPaste } from 'lucide-react';
 import TimeInput from './TimeInput';
 import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
@@ -23,6 +23,9 @@ interface WeeklyScheduleProps {
   onEmployeeDelete: (id: number) => void;
   managedColors: ManagedColor[];
   onManageColorsClick: () => void;
+  copiedDay: string | null;
+  onCopyDay: (day: string) => void;
+  onPasteDay: (day: string) => void;
 }
 
 const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
@@ -38,6 +41,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onEmployeeDelete,
   managedColors,
   onManageColorsClick,
+  copiedDay,
+  onCopyDay,
+  onPasteDay,
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
@@ -115,6 +121,28 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                   <div className="text-center">
                     <div className="font-bold">{day}</div>
                     <div className="text-sm text-gray-500">{dates[index]}</div>
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <button
+                        onClick={() => onCopyDay(day)}
+                        title={`Copier ${day}`}
+                        className={`p-1 rounded transition-colors ${
+                          copiedDay === day
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      {copiedDay && copiedDay !== day && (
+                        <button
+                          onClick={() => onPasteDay(day)}
+                          title={`Coller depuis ${copiedDay}`}
+                          className="p-1 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                        >
+                          <ClipboardPaste className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </th>
               ))}
