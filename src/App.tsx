@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Clock, Calendar, FileSpreadsheet } from 'lucide-react';
+import { Clock, Calendar, FileSpreadsheet, Download } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
@@ -11,6 +11,7 @@ import { getCurrentWeekNumber, getWeekDates, formatDate } from './utils/dateUtil
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
 import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
+import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -280,7 +281,16 @@ function App() {
             </div>
           </div>
 
-          <CSVImport onImport={handleCSVImport} existingEmployees={employees} />
+          <div className="flex items-center gap-2">
+            <CSVImport onImport={handleCSVImport} existingEmployees={employees} />
+            <button
+              onClick={() => downloadCSV(employees, schedules, weekNumber, year)}
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 active:bg-teal-800 shadow-sm transition-all duration-150"
+            >
+              <Download className="w-5 h-5" />
+              <span>Exporter CSV</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
