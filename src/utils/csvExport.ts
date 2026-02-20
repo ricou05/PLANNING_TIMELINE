@@ -6,19 +6,22 @@ export const generateCSV = (
   employees: Employee[],
   schedules: Record<string, Schedule>,
   weekNumber: number,
-  year: number
+  year: number,
+  includeColors: boolean = false
 ): string => {
   const lines: string[] = [];
 
   const headerCells = ['EMPLOYES', ''];
   DAYS.forEach(day => {
     headerCells.push(day, '');
+    if (includeColors) headerCells.push('');
   });
   lines.push(headerCells.join(';'));
 
   const subHeaderCells = ['', ''];
   DAYS.forEach(() => {
     subHeaderCells.push('DEBUT', 'FIN');
+    if (includeColors) subHeaderCells.push('COULEUR');
   });
   lines.push(subHeaderCells.join(';'));
 
@@ -33,9 +36,17 @@ export const generateCSV = (
       if (schedule) {
         morningCells.push(schedule.morningStart || '00:00', schedule.morningEnd || '00:00');
         afternoonCells.push(schedule.afternoonStart || '00:00', schedule.afternoonEnd || '00:00');
+        if (includeColors) {
+          morningCells.push(schedule.morningColor || '');
+          afternoonCells.push(schedule.afternoonColor || '');
+        }
       } else {
         morningCells.push('00:00', '00:00');
         afternoonCells.push('00:00', '00:00');
+        if (includeColors) {
+          morningCells.push('');
+          afternoonCells.push('');
+        }
       }
     });
 
@@ -50,9 +61,10 @@ export const downloadCSV = (
   employees: Employee[],
   schedules: Record<string, Schedule>,
   weekNumber: number,
-  year: number
+  year: number,
+  includeColors: boolean = false
 ): void => {
-  const csv = generateCSV(employees, schedules, weekNumber, year);
+  const csv = generateCSV(employees, schedules, weekNumber, year, includeColors);
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

@@ -17,17 +17,31 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
+  const [importColors, setImportColors] = useState(true);
+  const [fileHasColors, setFileHasColors] = useState<boolean | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.type !== 'text/csv' && !selectedFile.name.endsWith('.csv')) {
-        setError('Le fichier doit être au format CSV');
+        setError('Le fichier doit etre au format CSV');
         setFile(null);
+        setFileHasColors(null);
         return;
       }
       setFile(selectedFile);
       setError(null);
+
+      const text = await selectedFile.text();
+      const lines = text.split('\n').filter(line => line.trim().length > 0);
+      if (lines.length >= 2) {
+        const subHeader = lines[1].split(';');
+        const detected = subHeader.some(cell => cell.trim().toUpperCase() === 'COULEUR');
+        setFileHasColors(detected);
+        setImportColors(detected);
+      } else {
+        setFileHasColors(null);
+      }
     }
   };
 
@@ -39,7 +53,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
 
     try {
       const text = await file.text();
-      const result = parseCSV(text, existingEmployees, importMode === 'replace');
+      const result = parseCSV(text, existingEmployees, importMode === 'replace', importColors);
       
       if (result.errors.length > 0) {
         setError(`Erreurs lors de l'importation: ${result.errors.join(', ')}`);
@@ -124,10 +138,30 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Fusionner: Ajoute ou met à jour les employés et horaires<br />
-                    Remplacer: Supprime toutes les données existantes avant l'import
+                    Fusionner: Ajoute ou met a jour les employes et horaires<br />
+                    Remplacer: Supprime toutes les donnees existantes avant l'import
                   </p>
                 </div>
+
+                {fileHasColors !== null && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={importColors}
+                        onChange={(e) => setImportColors(e.target.checked)}
+                        disabled={!fileHasColors}
+                        className="h-4 w-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 transition-all duration-150"
+                      />
+                      <span className="text-sm text-gray-700">Importer les couleurs</span>
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500 ml-6">
+                      {fileHasColors
+                        ? 'Le fichier contient des codes couleur. Decochez pour les ignorer.'
+                        : 'Le fichier ne contient pas de codes couleur.'}
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
@@ -145,12 +179,18 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
 
                 <div className="bg-gray-50 p-3 rounded-md">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Format CSV attendu:</h3>
-                  <pre className="text-xs text-gray-600 overflow-x-auto">
-                    EMPLOYES;;LUNDI;;MARDI;;...;DIMANCHE;<br />
-                    ;;DEBUT;FIN;DEBUT;FIN;...;DEBUT;FIN<br />
-                    Nicolas;Matin;07:45;11:00;07:00;12:00;...;08:00;13:00<br />
-                    ;Apres-Midi;00:00;00:00;16:00;19:30;...;18:00;19:30<br />
-                    Pierre;Matin;...
+                  <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
+{`EMPLOYES;;LUNDI;;MARDI;;...
+;;DEBUT;FIN;DEBUT;FIN;...
+Nicolas;Matin;07:45;11:00;07:00;12:00;...
+;Apres-Midi;00:00;00:00;16:00;19:30;...`}
+                  </pre>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2 mt-3">Avec couleurs:</h3>
+                  <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
+{`EMPLOYES;;LUNDI;;;MARDI;;;...
+;;DEBUT;FIN;COULEUR;DEBUT;FIN;COULEUR;...
+Nicolas;Matin;07:45;11:00;bleu;07:00;12:00;vert;...
+;Apres-Midi;00:00;00:00;;16:00;19:30;bleu;...`}
                   </pre>
                 </div>
               </div>

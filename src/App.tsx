@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
@@ -16,6 +16,50 @@ import { downloadCSV } from './utils/csvExport';
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 const autoSaved = loadScheduleAutoSave();
+
+const CSVExportButton: React.FC<{ onExport: (withColors: boolean) => void }> = ({ onExport }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 active:bg-teal-800 shadow-sm transition-all duration-150"
+      >
+        <Download className="w-5 h-5" />
+        <span>Exporter CSV</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+          <button
+            onClick={() => { onExport(false); setIsOpen(false); }}
+            className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100"
+          >
+            Sans couleurs
+          </button>
+          <button
+            onClick={() => { onExport(true); setIsOpen(false); }}
+            className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Avec couleurs
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function App() {
   const currentYear = new Date().getFullYear();
@@ -300,13 +344,9 @@ function App() {
 
           <div className="flex items-center gap-2">
             <CSVImport onImport={handleCSVImport} existingEmployees={employees} />
-            <button
-              onClick={() => downloadCSV(employees, schedules, weekNumber, year)}
-              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 active:bg-teal-800 shadow-sm transition-all duration-150"
-            >
-              <Download className="w-5 h-5" />
-              <span>Exporter CSV</span>
-            </button>
+            <CSVExportButton
+              onExport={(withColors) => downloadCSV(employees, schedules, weekNumber, year, withColors)}
+            />
           </div>
         </div>
 
