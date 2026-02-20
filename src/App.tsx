@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download } from 'lucide-react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
@@ -63,6 +63,16 @@ function App() {
       }));
       setEmployees(loadEmployeeOrder(newEmployees));
     }
+  };
+
+  const handleAddEmployee = () => {
+    const maxId = employees.reduce((max, emp) => Math.max(max, emp.id), 0);
+    const newEmployee: Employee = {
+      id: maxId + 1,
+      name: `Employe ${maxId + 1}`,
+    };
+    setEmployees(prev => [...prev, newEmployee]);
+    setEmployeeCount(prev => prev + 1);
   };
 
   const handleScheduleChange = (employeeId: number, day: string, period: keyof Schedule, value: string) => {
@@ -278,6 +288,13 @@ function App() {
                 onChange={handleEmployeeCountChange}
                 className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
               />
+              <button
+                onClick={handleAddEmployee}
+                title="Ajouter un employe"
+                className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all duration-150"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
