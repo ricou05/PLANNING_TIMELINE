@@ -22,9 +22,39 @@ export const getTextColorForHex = (hex: string): string => {
   return isLightColor(hex) ? '#000000' : '#FFFFFF';
 };
 
+const COLOR_ALIASES: Record<string, string[]> = {
+  'bleu': ['bleu fonce', 'bleu foncé', 'bleu-fonce', 'blue dark', 'dark blue'],
+  'bleu ciel': ['bleu clair', 'bleu-clair', 'light blue', 'cyan', 'bleu-ciel'],
+  'rouge': ['red'],
+  'vert': ['green'],
+  'jaune': ['yellow'],
+  'orange': ['orange'],
+  'violet': ['purple', 'rose'],
+};
+
+export const normalizeColorId = (input: string, colors: ManagedColor[]): string => {
+  const normalized = input.trim().toLowerCase();
+  const exact = colors.find(c => c.id === normalized);
+  if (exact) return exact.id;
+
+  for (const [id, aliases] of Object.entries(COLOR_ALIASES)) {
+    if (aliases.includes(normalized)) {
+      const exists = colors.find(c => c.id === id);
+      if (exists) return id;
+    }
+  }
+
+  for (const color of colors) {
+    if (color.label.toLowerCase() === normalized) return color.id;
+  }
+
+  return input;
+};
+
 export const findManagedColor = (colors: ManagedColor[], colorId?: string): ManagedColor | undefined => {
   if (!colorId) return undefined;
-  return colors.find(c => c.id === colorId);
+  const resolved = normalizeColorId(colorId, colors);
+  return colors.find(c => c.id === resolved);
 };
 
 export const generateColorId = (label: string): string => {

@@ -1,4 +1,5 @@
-import { Employee, Schedule } from '../types';
+import { Employee, Schedule, ManagedColor } from '../types';
+import { normalizeColorId } from './colorUtils';
 
 interface CSVParseResult {
   employees: Employee[];
@@ -17,7 +18,8 @@ export const parseCSV = (
   csvContent: string,
   existingEmployees: Employee[] = [],
   replaceAll: boolean = false,
-  importColors: boolean = true
+  importColors: boolean = true,
+  managedColors: ManagedColor[] = []
 ): CSVParseResult => {
   const result: CSVParseResult = {
     employees: replaceAll ? [] : [...existingEmployees],
@@ -118,7 +120,9 @@ export const parseCSV = (
             result.schedules[scheduleKey][`${period}End`] = endTime;
 
             if (hasColorColumns && importColors && colorValue) {
-              result.schedules[scheduleKey][`${period}Color`] = colorValue;
+              result.schedules[scheduleKey][`${period}Color`] = managedColors.length > 0
+                ? normalizeColorId(colorValue, managedColors)
+                : colorValue;
             }
 
             result.importedCount++;

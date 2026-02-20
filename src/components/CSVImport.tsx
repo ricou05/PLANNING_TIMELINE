@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, AlertCircle, Check } from 'lucide-react';
-import { Employee, Schedule } from '../types';
+import { Employee, Schedule, ManagedColor } from '../types';
 import { parseCSV } from '../utils/csvParser';
 
 interface CSVImportProps {
@@ -9,9 +9,10 @@ interface CSVImportProps {
     schedules: Record<string, Schedule>;
   }) => void;
   existingEmployees: Employee[];
+  managedColors: ManagedColor[];
 }
 
-const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) => {
+const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees, managedColors }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +54,7 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees }) =>
 
     try {
       const text = await file.text();
-      const result = parseCSV(text, existingEmployees, importMode === 'replace', importColors);
+      const result = parseCSV(text, existingEmployees, importMode === 'replace', importColors, managedColors);
       
       if (result.errors.length > 0) {
         setError(`Erreurs lors de l'importation: ${result.errors.join(', ')}`);

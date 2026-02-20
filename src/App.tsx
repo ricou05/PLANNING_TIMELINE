@@ -343,7 +343,7 @@ function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            <CSVImport onImport={handleCSVImport} existingEmployees={employees} />
+            <CSVImport onImport={handleCSVImport} existingEmployees={employees} managedColors={managedColors} />
             <CSVExportButton
               onExport={(withColors) => downloadCSV(employees, schedules, weekNumber, year, withColors)}
             />
