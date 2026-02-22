@@ -102,7 +102,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
           data.year,
           data.colorLabels
         );
-        setSelectedSchedule(scheduleToUpdate);
+        setSelectedSchedule({ ...scheduleToUpdate, name });
       } else {
         result = await saveSchedule(
           name,
@@ -112,6 +112,18 @@ const FileMenu: React.FC<FileMenuProps> = ({
           data.year,
           data.colorLabels
         );
+        if (!result.error) {
+          setSelectedSchedule({
+            id: result.id,
+            name,
+            schedules: data.schedules,
+            employees: data.employees,
+            weekNumber: data.weekNumber,
+            year: data.year,
+            colorLabels: data.colorLabels,
+            createdAt: null as any,
+          });
+        }
       }
 
       if (result.error) {
@@ -262,7 +274,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
             </button>
 
             <button
-              onClick={() => setShowSaveAsDialog(true)}
+              onClick={() => { loadSavedSchedules(); setShowSaveAsDialog(true); }}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
             >
@@ -313,7 +325,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
 
       {showSaveAsDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[480px] animate-scaleIn">
+          <div className="bg-white rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col animate-scaleIn">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Enregistrer sous</h2>
               <button
@@ -324,33 +336,63 @@ const FileMenu: React.FC<FileMenuProps> = ({
               </button>
             </div>
 
-            <div className="p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom du planning
-              </label>
-              <input
-                type="text"
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                placeholder={`${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
-                autoFocus
-              />
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nouvelle sauvegarde
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder={`${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleSave(saveName || `${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`)}
+                    disabled={loading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150 whitespace-nowrap"
+                  >
+                    Creer
+                  </button>
+                </div>
+              </div>
+
+              {savedSchedules.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ou ecraser une sauvegarde existante
+                  </label>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {savedSchedules.map((schedule) => (
+                      <button
+                        key={schedule.id}
+                        onClick={() => handleSave(schedule.name, schedule)}
+                        disabled={loading}
+                        className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition-all duration-150 disabled:opacity-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">{schedule.name}</span>
+                          <span className="text-xs text-orange-600 font-medium">Ecraser</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Semaine {schedule.weekNumber} - {schedule.year}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end">
               <button
                 onClick={() => setShowSaveAsDialog(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Annuler
-              </button>
-              <button
-                onClick={() => handleSave(saveName || `${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`)}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
-              >
-                Enregistrer
               </button>
             </div>
           </div>
