@@ -368,6 +368,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     style={{ width: timelineWidth }}
                     onMouseDown={(e) => handleTimelineMouseDown(e, employee.id)}
                   >
+                    {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
+                      const minutes = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME) + index * 15;
+                      const time = minutesToTime(minutes);
+                      return (
+                        <div
+                          key={time}
+                          className="absolute h-full border-l border-gray-100"
+                          style={{ left: calculatePosition(time), zIndex: 0 }}
+                        />
+                      );
+                    })}
+
                     {schedule.morningStart && schedule.morningEnd && (
                       <div
                         className="absolute h-7 top-1 border rounded cursor-move group"
@@ -376,6 +388,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                           width: calculateWidth(schedule.morningStart, schedule.morningEnd),
                           backgroundColor: morningStyle.bg || '#DBEAFE',
                           borderColor: morningStyle.border || '#BFDBFE',
+                          zIndex: 1,
                         }}
                         onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'morning')}
                         onClick={(e) => handlePeriodClick(e, employee.id, 'morning')}
@@ -405,6 +418,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                           width: calculateWidth(schedule.afternoonStart, schedule.afternoonEnd),
                           backgroundColor: afternoonStyle.bg || '#F3F4F6',
                           borderColor: afternoonStyle.border || '#D1D5DB',
+                          zIndex: 1,
                         }}
                         onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'afternoon')}
                         onClick={(e) => handlePeriodClick(e, employee.id, 'afternoon')}
@@ -426,21 +440,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                       </div>
                     )}
 
-                    {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
-                      const minutes = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME) + index * 15;
-                      const time = minutesToTime(minutes);
-                      return (
-                        <div
-                          key={time}
-                          className="absolute h-full border-l border-gray-100"
-                          style={{ left: calculatePosition(time) }}
-                        />
-                      );
-                    })}
-
                     {(isCreating || isDragging || isResizing) && activeEmployee === employee.id && dragStart !== null && dragEnd !== null && (
                       <div
-                        className="absolute h-7 top-1 bg-blue-100/70 border border-blue-200 border-dashed rounded pointer-events-none"
+                        className="absolute h-7 top-1 bg-blue-100/70 border border-blue-200 border-dashed rounded pointer-events-none z-[2]"
                         style={{
                           left: Math.min(dragStart, dragEnd),
                           width: Math.abs(dragEnd - dragStart),
