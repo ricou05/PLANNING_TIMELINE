@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown } from 'lucide-react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, LayoutGrid } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
+import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
 import FileMenu from './components/FileMenu/FileMenu';
@@ -214,7 +215,19 @@ function App() {
   const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
-    if (activeTab === 'weekly') {
+    if (activeTab === 'visual') {
+      return (
+        <WeeklyVisualView
+          employees={employees}
+          days={DAYS}
+          dates={weekDates.map(formatDate)}
+          schedules={schedules}
+          weekNumber={weekNumber}
+          year={year}
+          managedColors={managedColors}
+        />
+      );
+    } else if (activeTab === 'weekly') {
       return (
         <WeeklySchedule
           employees={employees}
@@ -351,6 +364,18 @@ function App() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('visual')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
+              ${activeTab === 'visual'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Vue Planning
+          </button>
+
           <button
             onClick={() => setActiveTab('weekly')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
