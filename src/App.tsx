@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown } from 'lucide-react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, LayoutGrid } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
+import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
 import FileMenu from './components/FileMenu/FileMenu';
@@ -214,7 +215,19 @@ function App() {
   const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
-    if (activeTab === 'weekly') {
+    if (activeTab === 'visual') {
+      return (
+        <WeeklyVisualView
+          employees={employees}
+          days={DAYS}
+          dates={weekDates.map(formatDate)}
+          schedules={schedules}
+          weekNumber={weekNumber}
+          year={year}
+          managedColors={managedColors}
+        />
+      );
+    } else if (activeTab === 'weekly') {
       return (
         <WeeklySchedule
           employees={employees}
@@ -352,15 +365,39 @@ function App() {
 
         <div className="flex flex-wrap gap-2 mb-6">
           <button
-            onClick={() => setActiveTab('weekly')}
+            onClick={() => {
+              if (activeTab === 'weekly') setActiveTab('visual');
+              else if (activeTab === 'visual') setActiveTab('weekly');
+              else setActiveTab('weekly');
+            }}
+            title={
+              activeTab === 'weekly'
+                ? 'Basculer vers Vue Hebdomadaire 2 (visuelle)'
+                : activeTab === 'visual'
+                ? 'Basculer vers Vue Hebdomadaire 1 (édition)'
+                : 'Afficher la vue hebdomadaire'
+            }
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'weekly'
+              ${activeTab === 'weekly' || activeTab === 'visual'
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
           >
-            <Calendar className="h-4 w-4" />
-            Vue Hebdomadaire
+            {activeTab === 'visual' ? (
+              <LayoutGrid className="h-4 w-4" />
+            ) : (
+              <Calendar className="h-4 w-4" />
+            )}
+            {activeTab === 'weekly'
+              ? 'Vue Hebdomadaire 1'
+              : activeTab === 'visual'
+              ? 'Vue Hebdomadaire 2'
+              : 'Vue Hebdomadaire'}
+            {(activeTab === 'weekly' || activeTab === 'visual') && (
+              <span className="ml-1 text-xs bg-white/25 rounded px-1">
+                {activeTab === 'weekly' ? '1→2' : '2→1'}
+              </span>
+            )}
           </button>
 
           <button
