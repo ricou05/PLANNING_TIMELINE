@@ -314,7 +314,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       >
         <div style={{ width: totalWidth }} className="relative">
           <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
-            <div className="flex">
+            <div className="flex min-h-[48px]">
               <div style={{ width: COLUMN_WIDTH.employee }} className="flex-shrink-0 border-r border-gray-200 bg-gray-50" />
               <div className="flex" style={{ width: timelineWidth }}>
                 {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
