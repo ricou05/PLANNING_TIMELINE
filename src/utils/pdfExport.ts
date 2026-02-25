@@ -4,6 +4,10 @@ import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateWeeklyHours, calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
 
+export interface PDFExportOptions {
+  showTotalColumn: boolean;
+}
+
 interface ExportToPDFParams {
   employees: Employee[];
   days: string[];
@@ -12,6 +16,7 @@ interface ExportToPDFParams {
   weekNumber: number;
   year: number;
   managedColors: ManagedColor[];
+  options?: PDFExportOptions;
 }
 
 // A4 landscape dimensions at 96dpi
@@ -66,7 +71,9 @@ const createPDFTable = ({
   weekNumber,
   year,
   managedColors,
+  options,
 }: ExportToPDFParams): HTMLElement => {
+  const showTotal = options?.showTotalColumn !== false;
   const hasLegend = managedColors.length > 0;
   const tableAvailH =
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
@@ -109,10 +116,12 @@ const createPDFTable = ({
     headerRow.appendChild(th);
   });
 
-  const thTotal = document.createElement('th');
-  thTotal.style.cssText = thStyle + 'width:52px;';
-  thTotal.textContent = 'Total';
-  headerRow.appendChild(thTotal);
+  if (showTotal) {
+    const thTotal = document.createElement('th');
+    thTotal.style.cssText = thStyle + 'width:52px;';
+    thTotal.textContent = 'Total';
+    headerRow.appendChild(thTotal);
+  }
 
   thead.appendChild(headerRow);
   table.appendChild(thead);
@@ -154,11 +163,13 @@ const createPDFTable = ({
       morningRow.appendChild(td);
     });
 
-    const totalCell = document.createElement('td');
-    totalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;border-bottom:none;' + bgColor;
-    totalCell.textContent = formatHours(weeklyTotal);
-    totalCell.rowSpan = 2;
-    morningRow.appendChild(totalCell);
+    if (showTotal) {
+      const totalCell = document.createElement('td');
+      totalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;border-bottom:none;' + bgColor;
+      totalCell.textContent = formatHours(weeklyTotal);
+      totalCell.rowSpan = 2;
+      morningRow.appendChild(totalCell);
+    }
 
     const afternoonRow = document.createElement('tr');
     afternoonRow.style.height = `${rowH}px`;
@@ -211,10 +222,12 @@ const createPDFTable = ({
     footerRow.appendChild(td);
   });
 
-  const grandTotalCell = document.createElement('td');
-  grandTotalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
-  grandTotalCell.textContent = formatHours(grandTotal);
-  footerRow.appendChild(grandTotalCell);
+  if (showTotal) {
+    const grandTotalCell = document.createElement('td');
+    grandTotalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
+    grandTotalCell.textContent = formatHours(grandTotal);
+    footerRow.appendChild(grandTotalCell);
+  }
 
   tbody.appendChild(footerRow);
   table.appendChild(tbody);
@@ -253,7 +266,9 @@ const createVisualPDFTable = ({
   weekNumber,
   year,
   managedColors,
+  options,
 }: ExportToPDFParams): HTMLElement => {
+  const showTotal = options?.showTotalColumn !== false;
   const hasLegend = managedColors.length > 0;
   const tableAvailH =
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
@@ -293,10 +308,12 @@ const createVisualPDFTable = ({
     headerRow.appendChild(th);
   });
 
-  const thTotal = document.createElement('th');
-  thTotal.style.cssText = thStyle + 'width:60px;';
-  thTotal.textContent = 'Total';
-  headerRow.appendChild(thTotal);
+  if (showTotal) {
+    const thTotal = document.createElement('th');
+    thTotal.style.cssText = thStyle + 'width:60px;';
+    thTotal.textContent = 'Total';
+    headerRow.appendChild(thTotal);
+  }
 
   thead.appendChild(headerRow);
   table.appendChild(thead);
@@ -344,10 +361,12 @@ const createVisualPDFTable = ({
       tr.appendChild(td);
     });
 
-    const totalCell = document.createElement('td');
-    totalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:${rowBg};`;
-    totalCell.textContent = weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—';
-    tr.appendChild(totalCell);
+    if (showTotal) {
+      const totalCell = document.createElement('td');
+      totalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:${rowBg};`;
+      totalCell.textContent = weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—';
+      tr.appendChild(totalCell);
+    }
 
     tbody.appendChild(tr);
   });
@@ -375,10 +394,12 @@ const createVisualPDFTable = ({
     footerRow.appendChild(td);
   });
 
-  const grandTotalCell = document.createElement('td');
-  grandTotalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
-  grandTotalCell.textContent = grandTotal > 0 ? `${grandTotal.toFixed(1)}h` : '—';
-  footerRow.appendChild(grandTotalCell);
+  if (showTotal) {
+    const grandTotalCell = document.createElement('td');
+    grandTotalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
+    grandTotalCell.textContent = grandTotal > 0 ? `${grandTotal.toFixed(1)}h` : '—';
+    footerRow.appendChild(grandTotalCell);
+  }
 
   tbody.appendChild(footerRow);
   table.appendChild(tbody);

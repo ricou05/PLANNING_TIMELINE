@@ -6,6 +6,7 @@ import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
 import ColorLegends from './ColorLegends';
 import { exportVisualToPDF } from '../utils/pdfExport';
+import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 
 interface WeeklyVisualViewProps {
   employees: Employee[];
@@ -90,11 +91,13 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   managedColors,
 }) => {
   const [exporting, setExporting] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (options: PDFExportOptions) => {
+    setShowPDFModal(false);
     setExporting(true);
     try {
-      await exportVisualToPDF({ employees, days, dates, schedules, weekNumber, year, managedColors });
+      await exportVisualToPDF({ employees, days, dates, schedules, weekNumber, year, managedColors, options });
     } catch {
       alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
     } finally {
@@ -106,13 +109,20 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
     <div className="space-y-4">
       <div className="px-4 flex justify-end">
         <button
-          onClick={handleExportPDF}
+          onClick={() => setShowPDFModal(true)}
           disabled={exporting}
           className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
         >
           <Download className="w-5 h-5" />
           <span>{exporting ? 'Export en cours…' : 'Exporter PDF'}</span>
         </button>
+
+        {showPDFModal && (
+          <PDFExportModal
+            onConfirm={handleExportPDF}
+            onCancel={() => setShowPDFModal(false)}
+          />
+        )}
       </div>
 
       <ColorLegends managedColors={managedColors} />

@@ -9,6 +9,7 @@ import { findManagedColor } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
 import { exportToPDF } from '../utils/pdfExport';
+import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 
 interface WeeklyScheduleProps {
   employees: Employee[];
@@ -47,18 +48,12 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
+  const [showPDFModal, setShowPDFModal] = useState(false);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (options: PDFExportOptions) => {
+    setShowPDFModal(false);
     try {
-      await exportToPDF({
-        employees,
-        days,
-        dates,
-        schedules,
-        weekNumber,
-        year,
-        managedColors,
-      });
+      await exportToPDF({ employees, days, dates, schedules, weekNumber, year, managedColors, options });
     } catch (error) {
       console.error('Erreur lors de l\'export PDF:', error);
       alert('Erreur lors de la generation du PDF. Veuillez reessayer.');
@@ -100,12 +95,19 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
         />
 
         <button
-          onClick={handleExportPDF}
+          onClick={() => setShowPDFModal(true)}
           className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Download className="w-5 h-5" />
           <span>Exporter PDF</span>
         </button>
+
+        {showPDFModal && (
+          <PDFExportModal
+            onConfirm={handleExportPDF}
+            onCancel={() => setShowPDFModal(false)}
+          />
+        )}
       </div>
 
       <ColorLegends managedColors={managedColors} />
