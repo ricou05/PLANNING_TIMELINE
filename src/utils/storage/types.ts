@@ -4,7 +4,7 @@ export interface StorageOptions {
 }
 
 export interface StorageProvider {
-  get: (key: string) => any;
-  set: (key: string, value: any, options?: StorageOptions) => void;
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown, options?: StorageOptions) => void;
   remove: (key: string) => void;
 }

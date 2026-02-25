@@ -42,6 +42,7 @@ export const parseCSV = (
 
   const colsPerDay = hasColorColumns ? 3 : 2;
 
+
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
   let currentEmployeeId: number | null = null;

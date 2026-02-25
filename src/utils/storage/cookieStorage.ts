@@ -12,7 +12,7 @@ export const cookieStorage: StorageProvider = {
     }
   },
 
-  set: (key: string, value: any, options?: StorageOptions) => {
+  set: (key: string, value: unknown, options?: StorageOptions) => {
     try {
       Cookies.set(key, JSON.stringify(value), {
         expires: options?.expires || 365
