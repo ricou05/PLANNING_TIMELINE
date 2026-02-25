@@ -334,17 +334,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   );
                 })}
               </div>
-              <div style={{ width: COLUMN_WIDTH.dailyTotal, minHeight: 48 }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center py-1">
-                <span className="text-sm font-bold text-blue-600 leading-tight">
-                  {employees.reduce((sum, emp) => sum + calculateDailyHours(schedules[`${emp.id}-${day}`] || {}), 0).toFixed(2)}h
-                </span>
-                <span className="text-xs font-medium text-gray-500 leading-tight">Total jour</span>
+              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
+                <span className="text-xs font-medium text-gray-500">Total jour</span>
               </div>
-              <div style={{ width: COLUMN_WIDTH.weeklyTotal, minHeight: 48 }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center py-1">
-                <span className="text-sm font-bold text-blue-600 leading-tight">
-                  {employees.reduce((sum, emp) => sum + calculateWeeklyHours(schedules, emp.id), 0).toFixed(2)}h
-                </span>
-                <span className="text-xs font-medium text-gray-500 leading-tight">Total sem.</span>
+              <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
+                <span className="text-xs font-medium text-gray-500">Total sem.</span>
               </div>
             </div>
           </div>
@@ -473,6 +467,24 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* Ligne de totaux */}
+          <div className="flex border-t-2 border-gray-400 bg-blue-50">
+            <div style={{ width: COLUMN_WIDTH.employee }} className="flex-shrink-0 border-r border-gray-200 flex items-center justify-center h-10">
+              <span className="text-sm font-bold text-gray-700">TOTAL</span>
+            </div>
+            <div className="flex-shrink-0 h-10" style={{ width: timelineWidth }} />
+            <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-400 flex items-center justify-center h-10">
+              <span className="text-sm font-bold text-blue-700">
+                {employees.reduce((sum, emp) => sum + calculateDailyHours(schedules[`${emp.id}-${day}`] || {}), 0).toFixed(2)}h
+              </span>
+            </div>
+            <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-400 flex items-center justify-center h-10">
+              <span className="text-sm font-bold text-blue-700">
+                {employees.reduce((sum, emp) => sum + calculateWeeklyHours(schedules, emp.id), 0).toFixed(2)}h
+              </span>
+            </div>
           </div>
         </div>
       </div>
