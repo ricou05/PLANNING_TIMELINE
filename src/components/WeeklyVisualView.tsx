@@ -1,7 +1,7 @@
 import React from 'react';
 import { Employee, Schedule, ManagedColor } from '../types';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
-import { calculateWeeklyHours, calculateDailyHours } from '../utils/scheduleCalculations';
+import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
 import ColorLegends from './ColorLegends';
 
@@ -131,20 +131,12 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                   </td>
                   {days.map((day) => {
                     const schedule = schedules[`${employee.id}-${day}`];
-                    const dailyHours = calculateDailyHours(schedule);
                     return (
                       <td
                         key={`${employee.id}-${day}`}
                         className="border border-gray-300 align-middle"
                       >
-                        <div className="relative">
-                          <DayCell schedule={schedule} managedColors={managedColors} />
-                          {dailyHours > 0 && (
-                            <div className="absolute bottom-0.5 right-1 text-[11px] text-gray-400 font-medium">
-                              {dailyHours.toFixed(1)}h
-                            </div>
-                          )}
-                        </div>
+                        <DayCell schedule={schedule} managedColors={managedColors} />
                       </td>
                     );
                   })}
