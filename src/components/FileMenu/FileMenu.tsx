@@ -8,13 +8,7 @@ import { loadScheduleAutoSave, ScheduleAutoSaveData } from '../../hooks/useSched
 
 interface FileMenuProps {
   onRestore: (savedSchedule: SavedSchedule) => void;
-  onSave: () => Promise<{
-    schedules: any;
-    employees: any[];
-    weekNumber: number;
-    year: number;
-    colorLabels: any[];
-  }>;
+  onSave: () => Promise<SaveData>;
   onNewSchedule?: () => void;
   autoSaveTimestamp: string | null;
   showAutoSaveIndicator: boolean;

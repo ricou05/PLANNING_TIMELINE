@@ -1,13 +1,13 @@
-import { collection, addDoc, getDocs, query, orderBy, Timestamp, doc, updateDoc, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from './config';
-import { Schedule, ColorLabel, SavedSchedule } from '../../types';
+import { Schedule, ColorLabel, SavedSchedule, Employee } from '../../types';
 import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules } from '../storage/localSchedules';
 import { handleFirebaseError } from './error-handling';
 
 export const saveSchedule = async (
   name: string,
   schedules: Record<string, Schedule>,
-  employees: any[],
+  employees: Employee[],
   weekNumber: number,
   year: number,
   colorLabels: ColorLabel[]
@@ -51,7 +51,7 @@ export const updateSchedule = async (
   id: string,
   name: string,
   schedules: Record<string, Schedule>,
-  employees: any[],
+  employees: Employee[],
   weekNumber: number,
   year: number,
   colorLabels: ColorLabel[]

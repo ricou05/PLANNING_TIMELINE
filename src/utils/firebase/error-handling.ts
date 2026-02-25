@@ -25,6 +25,6 @@ export const isFirebaseError = (error: unknown): error is FirebaseError => {
   return error instanceof FirebaseError;
 };
 
-export const shouldFallbackToLocal = (error: unknown): boolean => {
+export const shouldFallbackToLocal = (): boolean => {
   return true; // Toujours utiliser le stockage local en cas d'erreur
 };
