@@ -365,27 +365,39 @@ function App() {
 
         <div className="flex flex-wrap gap-2 mb-6">
           <button
-            onClick={() => setActiveTab('visual')}
+            onClick={() => {
+              if (activeTab === 'weekly') setActiveTab('visual');
+              else if (activeTab === 'visual') setActiveTab('weekly');
+              else setActiveTab('weekly');
+            }}
+            title={
+              activeTab === 'weekly'
+                ? 'Basculer vers Vue Hebdomadaire 2 (visuelle)'
+                : activeTab === 'visual'
+                ? 'Basculer vers Vue Hebdomadaire 1 (édition)'
+                : 'Afficher la vue hebdomadaire'
+            }
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'visual'
+              ${activeTab === 'weekly' || activeTab === 'visual'
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
           >
-            <LayoutGrid className="h-4 w-4" />
-            Vue Planning
-          </button>
-
-          <button
-            onClick={() => setActiveTab('weekly')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'weekly'
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-          >
-            <Calendar className="h-4 w-4" />
-            Vue Hebdomadaire
+            {activeTab === 'visual' ? (
+              <LayoutGrid className="h-4 w-4" />
+            ) : (
+              <Calendar className="h-4 w-4" />
+            )}
+            {activeTab === 'weekly'
+              ? 'Vue Hebdomadaire 1'
+              : activeTab === 'visual'
+              ? 'Vue Hebdomadaire 2'
+              : 'Vue Hebdomadaire'}
+            {(activeTab === 'weekly' || activeTab === 'visual') && (
+              <span className="ml-1 text-xs bg-white/25 rounded px-1">
+                {activeTab === 'weekly' ? '1→2' : '2→1'}
+              </span>
+            )}
           </button>
 
           <button
