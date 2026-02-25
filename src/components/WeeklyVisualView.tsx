@@ -31,10 +31,10 @@ const ShiftBlock: React.FC<ShiftBlockProps> = ({ start, end, colorId, managedCol
 
   return (
     <div
-      className="rounded px-1.5 py-0.5 text-center leading-tight w-full"
+      className="rounded px-2 py-1 text-center leading-tight w-full"
       style={{ backgroundColor: bgColor, color: textColor }}
     >
-      <span className="text-[11px] font-semibold whitespace-nowrap">
+      <span className="text-sm font-semibold whitespace-nowrap">
         {start}–{end}
       </span>
     </div>
@@ -103,7 +103,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                 <th
                   key={day}
                   className="border border-gray-300 px-2 py-2 text-center font-bold text-gray-700"
-                  style={{ minWidth: 110 }}
+                  style={{ minWidth: 125 }}
                 >
                   <div className="text-sm">{day}</div>
                   <div className="text-xs font-normal text-gray-500">{dates[i]}</div>
@@ -140,7 +140,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                         <div className="relative">
                           <DayCell schedule={schedule} managedColors={managedColors} />
                           {dailyHours > 0 && (
-                            <div className="absolute bottom-0.5 right-1 text-[9px] text-gray-400 font-medium">
+                            <div className="absolute bottom-0.5 right-1 text-[11px] text-gray-400 font-medium">
                               {dailyHours.toFixed(1)}h
                             </div>
                           )}
