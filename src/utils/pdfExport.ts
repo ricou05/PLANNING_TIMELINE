@@ -320,7 +320,7 @@ const createVisualPDFTable = ({
 
   // Body
   const tbody = document.createElement('tbody');
-  const cellStyle = `padding:3px 4px;border:1px solid #d1d5db;vertical-align:middle;`;
+  const cellStyle = `padding:3px 4px;border:1px solid #d1d5db;vertical-align:middle;height:${rowH}px;`;
 
   employees.forEach((employee, empIndex) => {
     const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
@@ -348,7 +348,7 @@ const createVisualPDFTable = ({
         td.textContent = '—';
       } else {
         const inner = document.createElement('div');
-        inner.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+        inner.style.cssText = 'display:flex;flex-direction:column;gap:2px;justify-content:center;height:100%;';
         if (hasMorning) {
           inner.appendChild(buildShiftBlock(schedule!.morningStart, schedule!.morningEnd, schedule!.morningColor, managedColors, blockFontSize));
         }
