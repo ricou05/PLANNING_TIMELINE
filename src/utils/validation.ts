@@ -1,13 +1,13 @@
-import { Schedule, ColorLabel } from '../types';
+import { Schedule, ColorLabel, Employee } from '../types';
 
 interface ValidationResult {
   isValid: boolean;
   error?: string;
 }
 
-interface SaveData {
+export interface SaveData {
   schedules: Record<string, Schedule>;
-  employees: any[];
+  employees: Employee[];
   weekNumber: number;
   year: number;
   colorLabels: ColorLabel[];

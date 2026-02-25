@@ -2,6 +2,11 @@ import { SavedSchedule } from '../../types';
 import { Timestamp } from 'firebase/firestore';
 
 const STORAGE_KEY = 'localSchedules';
+type StoredTimestamp = Timestamp | { seconds: number; nanoseconds?: number } | number | null | undefined;
+type StoredSchedule = Omit<SavedSchedule, 'createdAt' | 'updatedAt'> & {
+  createdAt?: StoredTimestamp;
+  updatedAt?: StoredTimestamp;
+};
 
 export const saveLocalSchedule = async (schedule: SavedSchedule): Promise<void> => {
   try {
@@ -34,8 +39,8 @@ export const getLocalSchedules = async (): Promise<SavedSchedule[]> => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return [];
 
-    const schedules = JSON.parse(stored);
-    return schedules.map((schedule: any) => ({
+    const schedules = JSON.parse(stored) as StoredSchedule[];
+    return schedules.map((schedule) => ({
       ...schedule,
       createdAt: createTimestamp(schedule.createdAt),
       updatedAt: createTimestamp(schedule.updatedAt || schedule.createdAt)
@@ -47,7 +52,7 @@ export const getLocalSchedules = async (): Promise<SavedSchedule[]> => {
 };
 
 // Fonction utilitaire pour créer un Timestamp valide
-function createTimestamp(timestamp: any): Timestamp {
+function createTimestamp(timestamp: StoredTimestamp): Timestamp {
   if (!timestamp) {
     return Timestamp.now();
   }

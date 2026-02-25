@@ -10,7 +10,7 @@ export const useLocalStorage = () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       return stored ? JSON.parse(stored) : [];
-    } catch (error) {
+    } catch {
       setError('Erreur lors de la lecture des sauvegardes locales');
       return [];
     }
@@ -21,7 +21,7 @@ export const useLocalStorage = () => {
       const schedules = await getLocalSchedules();
       schedules.push(schedule);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules));
-    } catch (error) {
+    } catch {
       setError('Erreur lors de la sauvegarde locale');
     }
   }, [getLocalSchedules]);
