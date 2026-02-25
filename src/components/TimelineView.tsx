@@ -314,7 +314,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       >
         <div style={{ width: totalWidth }} className="relative">
           <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
-            <div className="flex min-h-[48px]">
+            <div className="flex min-h-[60px]">
               <div style={{ width: COLUMN_WIDTH.employee }} className="flex-shrink-0 border-r border-gray-200 bg-gray-50" />
               <div className="flex" style={{ width: timelineWidth }}>
                 {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
@@ -334,7 +334,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   );
                 })}
               </div>
-              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
+              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-0.5">
+                <span className="text-sm font-bold text-blue-600">
+                  {employees.reduce((sum, emp) => sum + calculateDailyHours(schedules[`${emp.id}-${day}`] || {}), 0).toFixed(2)}h
+                </span>
                 <span className="text-xs font-medium text-gray-500">Total jour</span>
               </div>
               <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
