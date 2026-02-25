@@ -334,7 +334,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   );
                 })}
               </div>
-              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
+              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
+                <span className="text-sm font-bold text-blue-600">
+                  {employees.reduce((sum, emp) => sum + calculateDailyHours(schedules[`${emp.id}-${day}`] || {}), 0).toFixed(2)}h
+                </span>
                 <span className="text-xs font-medium text-gray-500">Total jour</span>
               </div>
               <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
