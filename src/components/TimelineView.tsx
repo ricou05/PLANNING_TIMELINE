@@ -70,6 +70,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
 
+  const totalDailyHours = employees.reduce((sum, emp) => {
+    return sum + calculateDailyHours(schedules[`${emp.id}-${day}`]);
+  }, 0);
+
   const getColorStyle = (colorId?: string): { bg: string; border: string; text: string } => {
     const mc = findManagedColor(managedColors, colorId);
     if (!mc) return { bg: '', border: '', text: '' };
@@ -335,7 +339,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   );
                 })}
               </div>
-              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
+              <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
+                <span className="text-xs font-bold text-blue-700">{totalDailyHours.toFixed(2)}h</span>
                 <span className="text-xs font-medium text-gray-500">Total jour</span>
               </div>
               <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
