@@ -65,7 +65,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isCreating, setIsCreating] = useState(false);
-  const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
 
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
