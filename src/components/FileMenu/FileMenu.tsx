@@ -340,12 +340,12 @@ const FileMenu: React.FC<FileMenuProps> = ({
                     type="text"
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
-                    placeholder={`${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`}
+                    placeholder={`${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}_${String(new Date().getHours()).padStart(2, '0')}_${String(new Date().getMinutes()).padStart(2, '0')}`}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                     autoFocus
                   />
                   <button
-                    onClick={() => handleSave(saveName || `${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}`)}
+                    onClick={() => handleSave(saveName || `${new Date().getFullYear()}_${getCurrentWeekNumber()}_${savedSchedules.length + 1}_${String(new Date().getHours()).padStart(2, '0')}_${String(new Date().getMinutes()).padStart(2, '0')}`)}
                     disabled={loading}
                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150 whitespace-nowrap"
                   >
