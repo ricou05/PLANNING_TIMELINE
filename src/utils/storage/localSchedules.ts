@@ -34,6 +34,17 @@ export const updateLocalSchedule = async (id: string, updatedSchedule: SavedSche
   }
 };
 
+export const deleteLocalSchedule = async (id: string): Promise<void> => {
+  try {
+    const schedules = await getLocalSchedules();
+    const filtered = schedules.filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error('Error deleting from local storage:', error);
+    throw error;
+  }
+};
+
 export const getLocalSchedules = async (): Promise<SavedSchedule[]> => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);

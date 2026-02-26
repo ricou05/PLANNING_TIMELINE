@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock } from 'lucide-react';
-import { getSchedules, saveSchedule, updateSchedule } from '../../utils/firebase';
+import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2 } from 'lucide-react';
+import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
 import { SavedSchedule } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
@@ -36,6 +36,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<SavedSchedule | null>(null);
   const [saveName, setSaveName] = useState('');
+  const [scheduleToDelete, setScheduleToDelete] = useState<SavedSchedule | null>(null);
 
   useEffect(() => {
     loadSavedSchedules();
@@ -201,6 +202,29 @@ const FileMenu: React.FC<FileMenuProps> = ({
     onRestore(pseudoSchedule);
     setShowRestoreDialog(false);
     setSuccess('Brouillon auto-sauvegarde restaure');
+  };
+
+  const handleDelete = async (schedule: SavedSchedule) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await deleteSchedule(schedule.id);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        if (selectedSchedule?.id === schedule.id) {
+          setSelectedSchedule(null);
+        }
+        setSuccess('Sauvegarde supprimee avec succes');
+        await loadSavedSchedules();
+      }
+    } catch (error) {
+      console.error("Error deleting:", error);
+      setError("Erreur lors de la suppression");
+    } finally {
+      setLoading(false);
+      setScheduleToDelete(null);
+    }
   };
 
   const handleNewSchedule = () => {
@@ -393,6 +417,37 @@ const FileMenu: React.FC<FileMenuProps> = ({
         </div>
       )}
 
+      {scheduleToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] animate-fadeIn">
+          <div className="bg-white rounded-lg shadow-xl w-[400px] animate-scaleIn">
+            <div className="p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Confirmer la suppression</h2>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-gray-600">
+                Voulez-vous vraiment supprimer la sauvegarde <span className="font-semibold text-gray-900">"{scheduleToDelete.name}"</span> ?
+              </p>
+              <p className="text-xs text-red-500 mt-2">Cette action est irreversible.</p>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+              <button
+                onClick={() => setScheduleToDelete(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDelete(scheduleToDelete)}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showRestoreDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
           <div className="bg-white rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col animate-scaleIn">
@@ -453,19 +508,27 @@ const FileMenu: React.FC<FileMenuProps> = ({
                   )}
                   <div className="space-y-2">
                     {savedSchedules.map((schedule) => (
-                      <button
-                        key={schedule.id}
-                        onClick={() => handleRestore(schedule)}
-                        className="w-full p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150"
-                      >
-                        <div className="font-medium text-gray-900">{schedule.name}</div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          Semaine {schedule.weekNumber} - {schedule.year}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {schedule.employees?.length || 0} employes
-                        </div>
-                      </button>
+                      <div key={schedule.id} className="flex items-stretch gap-2">
+                        <button
+                          onClick={() => handleRestore(schedule)}
+                          className="flex-1 p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150"
+                        >
+                          <div className="font-medium text-gray-900">{schedule.name}</div>
+                          <div className="text-sm text-gray-500 mt-1">
+                            Semaine {schedule.weekNumber} - {schedule.year}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {schedule.employees?.length || 0} employes
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setScheduleToDelete(schedule); }}
+                          className="flex items-center justify-center px-3 border border-gray-200 rounded-lg hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-150"
+                          title="Supprimer cette sauvegarde"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>

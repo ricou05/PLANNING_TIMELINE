@@ -1,7 +1,7 @@
-import { collection, addDoc, getDocs, query, orderBy, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './config';
 import { Schedule, ColorLabel, SavedSchedule, Employee } from '../../types';
-import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules } from '../storage/localSchedules';
+import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules, deleteLocalSchedule } from '../storage/localSchedules';
 import { handleFirebaseError } from './error-handling';
 
 export const saveSchedule = async (
@@ -138,4 +138,19 @@ export const getSchedules = async (): Promise<{ schedules: SavedSchedule[], warn
     schedules: allSchedules,
     warnings: warnings.length > 0 ? warnings : undefined
   };
+};
+
+export const deleteSchedule = async (id: string): Promise<{ error?: string }> => {
+  try {
+    if (id.startsWith('local_')) {
+      await deleteLocalSchedule(id);
+      return {};
+    }
+
+    const scheduleRef = doc(db, 'schedules', id);
+    await deleteDoc(scheduleRef);
+    return {};
+  } catch (error) {
+    return { error: handleFirebaseError(error) };
+  }
 };
