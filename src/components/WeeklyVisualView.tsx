@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { Employee, Schedule, ManagedColor } from '../types';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
@@ -7,6 +7,14 @@ import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculati
 import ColorLegends from './ColorLegends';
 import { exportVisualToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
+
+const REST_DAY_STRIPES = `repeating-linear-gradient(
+  -45deg,
+  transparent,
+  transparent 4px,
+  rgba(0,0,0,0.06) 4px,
+  rgba(0,0,0,0.06) 8px
+)`;
 
 interface WeeklyVisualViewProps {
   employees: Employee[];
@@ -48,6 +56,20 @@ const DayCell: React.FC<{
   schedule: Schedule | undefined;
   managedColors: ManagedColor[];
 }> = ({ schedule, managedColors }) => {
+  if (schedule?.isRestDay) {
+    return (
+      <div
+        className="flex items-center justify-center h-full min-h-[48px]"
+        style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
+      >
+        <div className="flex items-center gap-1">
+          <X className="w-4 h-4 text-red-500" strokeWidth={3} />
+          <span className="text-xs font-bold text-gray-500 uppercase">Repos</span>
+        </div>
+      </div>
+    );
+  }
+
   const hasMorning = schedule?.morningStart && schedule?.morningEnd;
   const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
 

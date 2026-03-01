@@ -12,6 +12,7 @@ export interface Schedule {
   afternoonEnd: string;
   morningColor?: string;
   afternoonColor?: string;
+  isRestDay?: boolean;
 }
 
 export interface ColorLabel {
