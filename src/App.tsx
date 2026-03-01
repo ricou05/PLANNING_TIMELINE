@@ -312,6 +312,7 @@ function App() {
           onEmployeeDelete={handleEmployeeDelete}
           managedColors={managedColors}
           onManageColorsClick={() => setIsColorModalOpen(true)}
+          onToggleRestDay={handleToggleRestDay}
           weekNumber={weekNumber}
           year={year}
           dates={weekDates.map(formatDate)}

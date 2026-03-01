@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
+import ColorLegends from './ColorLegends';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
@@ -8,6 +9,14 @@ import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/peri
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
 import { X, FileDown } from 'lucide-react';
+
+const REST_DAY_STRIPES = `repeating-linear-gradient(
+  -45deg,
+  transparent,
+  transparent 4px,
+  rgba(0,0,0,0.06) 4px,
+  rgba(0,0,0,0.06) 8px
+)`;
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -19,6 +28,7 @@ interface TimelineViewProps {
   onEmployeeDelete: (id: number) => void;
   managedColors: ManagedColor[];
   onManageColorsClick: () => void;
+  onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
   weekNumber: number;
   year: number;
   dates: string[];
@@ -41,6 +51,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onEmployeeDelete,
   managedColors,
   onManageColorsClick,
+  onToggleRestDay,
   weekNumber,
   year,
   dates
@@ -65,6 +76,31 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isCreating, setIsCreating] = useState(false);
+  const [restDayDragOverEmployee, setRestDayDragOverEmployee] = useState<number | null>(null);
+
+  const handleRestDayDragOver = (e: React.DragEvent, employeeId: number) => {
+    if (e.dataTransfer.types.includes('application/rest-day')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      setRestDayDragOverEmployee(employeeId);
+    }
+  };
+
+  const handleRestDayDragLeave = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/rest-day')) {
+      setRestDayDragOverEmployee(null);
+    }
+  };
+
+  const handleRestDayDrop = (e: React.DragEvent, employeeId: number) => {
+    if (e.dataTransfer.types.includes('application/rest-day')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setRestDayDragOverEmployee(null);
+      onToggleRestDay(employeeId, day, true);
+    }
+  };
 
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
@@ -309,6 +345,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         </button>
       </div>
 
+      <ColorLegends managedColors={managedColors} showRestDayButton={true} />
+
       <div
         className="overflow-x-auto"
         ref={timelineRef}
@@ -351,10 +389,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           <div>
             {employees.map((employee, index) => {
               const schedule = schedules[`${employee.id}-${day}`] || {};
+              const isRestDay = schedule.isRestDay === true;
               const dailyHours = calculateDailyHours(schedule);
               const weeklyHours = calculateWeeklyHours(schedules, employee.id);
               const morningStyle = getColorStyle(schedule.morningColor);
               const afternoonStyle = getColorStyle(schedule.afternoonColor);
+              const isRestDragOver = restDayDragOverEmployee === employee.id;
 
               return (
                 <div key={employee.id} className="flex border-b border-gray-200">
@@ -368,97 +408,128 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     columnWidth={COLUMN_WIDTH.employee}
                     onDelete={onEmployeeDelete}
                   />
-                  <div
-                    className="relative flex-grow h-9"
-                    style={{ width: timelineWidth }}
-                    onMouseDown={(e) => handleTimelineMouseDown(e, employee.id)}
-                  >
-                    {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
-                      const minutes = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME) + index * 15;
-                      const time = minutesToTime(minutes);
-                      return (
+
+                  {isRestDay ? (
+                    <div
+                      className={`relative flex-grow h-9 flex items-center ${
+                        isRestDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
+                      }`}
+                      style={{ width: timelineWidth, background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
+                      onDragOver={(e) => handleRestDayDragOver(e, employee.id)}
+                      onDragLeave={handleRestDayDragLeave}
+                      onDrop={(e) => handleRestDayDrop(e, employee.id)}
+                    >
+                      <div className="flex items-center gap-2 px-4">
+                        <X className="w-4 h-4 text-red-500" strokeWidth={3} />
+                        <span className="text-xs font-bold text-gray-500 uppercase">Repos</span>
+                      </div>
+                      <button
+                        onClick={() => onToggleRestDay(employee.id, day, false)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Retirer le jour de repos"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`relative flex-grow h-9 ${
+                        isRestDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
+                      }`}
+                      style={{ width: timelineWidth }}
+                      onMouseDown={(e) => handleTimelineMouseDown(e, employee.id)}
+                      onDragOver={(e) => handleRestDayDragOver(e, employee.id)}
+                      onDragLeave={handleRestDayDragLeave}
+                      onDrop={(e) => handleRestDayDrop(e, employee.id)}
+                    >
+                      {Array.from({ length: (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 + 1 }).map((_, index) => {
+                        const minutes = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME) + index * 15;
+                        const time = minutesToTime(minutes);
+                        return (
+                          <div
+                            key={time}
+                            className="absolute h-full border-l border-gray-100"
+                            style={{ left: calculatePosition(time), zIndex: 0 }}
+                          />
+                        );
+                      })}
+
+                      {schedule.morningStart && schedule.morningEnd && (
                         <div
-                          key={time}
-                          className="absolute h-full border-l border-gray-100"
-                          style={{ left: calculatePosition(time), zIndex: 0 }}
-                        />
-                      );
-                    })}
+                          className="absolute h-7 top-1 border rounded cursor-move group"
+                          style={{
+                            left: calculatePosition(schedule.morningStart),
+                            width: calculateWidth(schedule.morningStart, schedule.morningEnd),
+                            backgroundColor: morningStyle.bg || '#DBEAFE',
+                            borderColor: morningStyle.border || '#BFDBFE',
+                            zIndex: 1,
+                          }}
+                          onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'morning')}
+                          onClick={(e) => handlePeriodClick(e, employee.id, 'morning')}
+                        >
+                          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
+                          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
+                          <span
+                            className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                            style={{ color: morningStyle.text || '#1E3A8A' }}
+                          >
+                            {schedule.morningStart} - {schedule.morningEnd}
+                          </span>
+                          <button
+                            onClick={() => handleDelete(employee.id, 'morning')}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3 h-3 text-red-600" />
+                          </button>
+                        </div>
+                      )}
 
-                    {schedule.morningStart && schedule.morningEnd && (
-                      <div
-                        className="absolute h-7 top-1 border rounded cursor-move group"
-                        style={{
-                          left: calculatePosition(schedule.morningStart),
-                          width: calculateWidth(schedule.morningStart, schedule.morningEnd),
-                          backgroundColor: morningStyle.bg || '#DBEAFE',
-                          borderColor: morningStyle.border || '#BFDBFE',
-                          zIndex: 1,
-                        }}
-                        onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'morning')}
-                        onClick={(e) => handlePeriodClick(e, employee.id, 'morning')}
-                      >
-                        <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
-                        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
-                        <span
-                          className="text-xs px-2 leading-[28px] whitespace-nowrap"
-                          style={{ color: morningStyle.text || '#1E3A8A' }}
+                      {schedule.afternoonStart && schedule.afternoonEnd && (
+                        <div
+                          className="absolute h-7 top-1 border rounded cursor-move group"
+                          style={{
+                            left: calculatePosition(schedule.afternoonStart),
+                            width: calculateWidth(schedule.afternoonStart, schedule.afternoonEnd),
+                            backgroundColor: afternoonStyle.bg || '#F3F4F6',
+                            borderColor: afternoonStyle.border || '#D1D5DB',
+                            zIndex: 1,
+                          }}
+                          onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'afternoon')}
+                          onClick={(e) => handlePeriodClick(e, employee.id, 'afternoon')}
                         >
-                          {schedule.morningStart} - {schedule.morningEnd}
-                        </span>
-                        <button
-                          onClick={() => handleDelete(employee.id, 'morning')}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
-                        >
-                          <X className="w-3 h-3 text-red-600" />
-                        </button>
-                      </div>
-                    )}
+                          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
+                          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
+                          <span
+                            className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                            style={{ color: afternoonStyle.text || '#374151' }}
+                          >
+                            {schedule.afternoonStart} - {schedule.afternoonEnd}
+                          </span>
+                          <button
+                            onClick={() => handleDelete(employee.id, 'afternoon')}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3 h-3 text-red-600" />
+                          </button>
+                        </div>
+                      )}
 
-                    {schedule.afternoonStart && schedule.afternoonEnd && (
-                      <div
-                        className="absolute h-7 top-1 border rounded cursor-move group"
-                        style={{
-                          left: calculatePosition(schedule.afternoonStart),
-                          width: calculateWidth(schedule.afternoonStart, schedule.afternoonEnd),
-                          backgroundColor: afternoonStyle.bg || '#F3F4F6',
-                          borderColor: afternoonStyle.border || '#D1D5DB',
-                          zIndex: 1,
-                        }}
-                        onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'afternoon')}
-                        onClick={(e) => handlePeriodClick(e, employee.id, 'afternoon')}
-                      >
-                        <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
-                        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
-                        <span
-                          className="text-xs px-2 leading-[28px] whitespace-nowrap"
-                          style={{ color: afternoonStyle.text || '#374151' }}
+                      {(isCreating || isDragging || isResizing) && activeEmployee === employee.id && dragStart !== null && dragEnd !== null && (
+                        <div
+                          className="absolute h-7 top-1 bg-blue-100/70 border border-blue-200 border-dashed rounded pointer-events-none z-[2]"
+                          style={{
+                            left: Math.min(dragStart, dragEnd),
+                            width: Math.abs(dragEnd - dragStart),
+                          }}
                         >
-                          {schedule.afternoonStart} - {schedule.afternoonEnd}
-                        </span>
-                        <button
-                          onClick={() => handleDelete(employee.id, 'afternoon')}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
-                        >
-                          <X className="w-3 h-3 text-red-600" />
-                        </button>
-                      </div>
-                    )}
+                          <span className="text-xs px-2 leading-[28px] whitespace-nowrap text-blue-800">
+                            {getTimeFromPosition(Math.min(dragStart, dragEnd))} - {getTimeFromPosition(Math.max(dragStart, dragEnd))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {(isCreating || isDragging || isResizing) && activeEmployee === employee.id && dragStart !== null && dragEnd !== null && (
-                      <div
-                        className="absolute h-7 top-1 bg-blue-100/70 border border-blue-200 border-dashed rounded pointer-events-none z-[2]"
-                        style={{
-                          left: Math.min(dragStart, dragEnd),
-                          width: Math.abs(dragEnd - dragStart),
-                        }}
-                      >
-                        <span className="text-xs px-2 leading-[28px] whitespace-nowrap text-blue-800">
-                          {getTimeFromPosition(Math.min(dragStart, dragEnd))} - {getTimeFromPosition(Math.max(dragStart, dragEnd))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
                   <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
                     <span className="text-sm font-medium text-blue-600">
                       {dailyHours.toFixed(2)}h
