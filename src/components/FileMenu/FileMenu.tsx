@@ -5,6 +5,7 @@ import { SavedSchedule } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData } from '../../hooks/useScheduleAutoSave';
+import { APP_VERSION, APP_RELEASE_DATE } from '../../version';
 
 interface FileMenuProps {
   onRestore: (savedSchedule: SavedSchedule) => void;
@@ -243,6 +244,9 @@ const FileMenu: React.FC<FileMenuProps> = ({
         <div className="max-w-[95%] mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-xl font-semibold text-gray-900 whitespace-nowrap">Planification des horaires</h1>
+            <span className="text-[10px] text-gray-400 whitespace-nowrap leading-tight self-end -ml-1 mb-0.5">
+              v{APP_VERSION} — {APP_RELEASE_DATE}
+            </span>
             {selectedSchedule && (
               <span className="text-sm text-gray-500 truncate">
                 Planning actuel: <span className="font-medium text-gray-700">{selectedSchedule.name}</span>
