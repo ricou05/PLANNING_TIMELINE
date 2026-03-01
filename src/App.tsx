@@ -170,6 +170,39 @@ function App() {
     }));
   };
 
+  const handleToggleRestDay = useCallback((employeeId: number, day: string, isRest: boolean) => {
+    setSchedules(prev => {
+      const key = `${employeeId}-${day}`;
+      if (isRest) {
+        return {
+          ...prev,
+          [key]: {
+            morningStart: '',
+            morningEnd: '',
+            afternoonStart: '',
+            afternoonEnd: '',
+            morningColor: undefined,
+            afternoonColor: undefined,
+            isRestDay: true,
+          }
+        };
+      } else {
+        const { isRestDay, ...rest } = prev[key] || {};
+        return {
+          ...prev,
+          [key]: {
+            morningStart: '',
+            morningEnd: '',
+            afternoonStart: '',
+            afternoonEnd: '',
+            ...rest,
+            isRestDay: false,
+          }
+        };
+      }
+    });
+  }, []);
+
   const handleCopyDay = useCallback((day: string) => {
     const daySchedules: Record<string, Schedule> = {};
     employees.forEach(emp => {
@@ -245,6 +278,7 @@ function App() {
           copiedDay={copiedDay}
           onCopyDay={handleCopyDay}
           onPasteDay={handlePasteDay}
+          onToggleRestDay={handleToggleRestDay}
         />
       );
     } else if (activeTab === 'excel') {
