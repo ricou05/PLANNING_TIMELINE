@@ -258,6 +258,12 @@ function App() {
           weekNumber={weekNumber}
           year={year}
           managedColors={managedColors}
+          onScheduleChange={handleScheduleChange}
+          onManageColorsClick={() => setIsColorModalOpen(true)}
+          onToggleRestDay={handleToggleRestDay}
+          copiedDay={copiedDay}
+          onCopyDay={handleCopyDay}
+          onPasteDay={handlePasteDay}
         />
       );
     } else if (activeTab === 'weekly') {

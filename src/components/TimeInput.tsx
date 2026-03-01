@@ -31,10 +31,10 @@ const TimeInput: React.FC<TimeInputProps> = ({
     const hoursNum = parseInt(hours, 10);
     const minutesNum = parseInt(minutes, 10);
     
-    // Validate minutes to be 00 or 30 only
-    const validMinutes = Math.round(minutesNum / 30) * 30;
+    // Round minutes to nearest 15-minute increment (00, 15, 30, 45)
+    const validMinutes = Math.round(minutesNum / 15) * 15;
     const adjustedMinutes = validMinutes === 60 ? '00' : validMinutes.toString().padStart(2, '0');
-    
+
     let finalHours = hoursNum;
     if (validMinutes === 60) {
       finalHours += 1;
