@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, LayoutGrid } from 'lucide-react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, LayoutGrid, Undo2, Redo2 } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
@@ -12,6 +12,7 @@ import { getCurrentWeekNumber, getWeekDates, formatDate } from './utils/dateUtil
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
 import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
+import { useUndoRedo } from './hooks/useUndoRedo';
 import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -64,7 +65,7 @@ const CSVExportButton: React.FC<{ onExport: (withColors: boolean) => void }> = (
 
 function App() {
   const currentYear = new Date().getFullYear();
-  const [schedules, setSchedules] = useState<Record<string, Schedule>>(autoSaved?.schedules || {});
+  const { schedules, setSchedules, setSchedulesWithoutHistory, undo, redo, canUndo, canRedo } = useUndoRedo(autoSaved?.schedules || {});
   const [activeTab, setActiveTab] = useState<'weekly' | 'excel' | string>('weekly');
   const [weekNumber, setWeekNumber] = useState(autoSaved?.weekNumber || getCurrentWeekNumber());
   const [year, setYear] = useState(autoSaved?.year || currentYear);
@@ -83,6 +84,21 @@ function App() {
   const [copiedDaySchedules, setCopiedDaySchedules] = useState<Record<string, Schedule> | null>(null);
   const weekDates = getWeekDates(weekNumber, year);
   const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
@@ -325,7 +341,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <FileMenu
         onRestore={(savedSchedule: SavedSchedule) => {
-          setSchedules(savedSchedule.schedules);
+          setSchedulesWithoutHistory(savedSchedule.schedules);
           setEmployees(savedSchedule.employees);
           setWeekNumber(savedSchedule.weekNumber);
           setYear(savedSchedule.year);
@@ -397,6 +413,24 @@ function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Annuler (Ctrl+Z)"
+              className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Annuler</span>
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Rétablir (Ctrl+Y)"
+              className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Rétablir</span>
+            </button>
             <CSVImport onImport={handleCSVImport} existingEmployees={employees} managedColors={managedColors} />
             <CSVExportButton
               onExport={(withColors) => downloadCSV(employees, schedules, weekNumber, year, withColors)}
