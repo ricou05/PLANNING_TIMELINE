@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { ManagedColor } from '../types';
 
 interface ColorPickerProps {
@@ -7,6 +7,7 @@ interface ColorPickerProps {
   onColorChange: (color: string) => void;
   managedColors: ManagedColor[];
   onManageClick: () => void;
+  showRestDayButton?: boolean;
 }
 
 const ColorPicker: React.FC<ColorPickerProps> = ({
@@ -14,7 +15,13 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
   onColorChange,
   managedColors,
   onManageClick,
+  showRestDayButton = false,
 }) => {
+  const handleRestDayDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/rest-day', 'true');
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <div className="flex items-start gap-4 overflow-visible">
       <span className="text-sm font-medium text-gray-700 mt-2">Couleur:</span>
@@ -49,6 +56,17 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
       >
         <Settings className="w-5 h-5" />
       </button>
+      {showRestDayButton && (
+        <div
+          draggable
+          onDragStart={handleRestDayDragStart}
+          className="mt-0.5 flex items-center gap-1.5 cursor-grab active:cursor-grabbing px-3 py-1.5 bg-gray-100 border-2 border-dashed border-gray-400 rounded-lg hover:bg-gray-200 hover:border-gray-500 transition-colors select-none"
+          title="Glisser-déposer sur une journée pour marquer un jour de repos"
+        >
+          <X className="w-4 h-4 text-red-500" />
+          <span className="text-sm font-semibold text-gray-600">Repos</span>
+        </div>
+      )}
     </div>
   );
 };

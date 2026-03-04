@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
-import ColorLegends from './ColorLegends';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
@@ -334,6 +333,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           onColorChange={setSelectedColor}
           managedColors={managedColors}
           onManageClick={onManageColorsClick}
+          showRestDayButton
         />
         <button
           onClick={handleExportPDF}
@@ -344,8 +344,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           {isExporting ? 'Export en cours...' : `Exporter ${day} en PDF`}
         </button>
       </div>
-
-      <ColorLegends managedColors={managedColors} showRestDayButton={true} />
 
       <div
         className="overflow-x-auto"
