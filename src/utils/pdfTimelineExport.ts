@@ -20,6 +20,8 @@ const EMPLOYEE_COL_W = 120;
 const TOTAL_COL_W = 60;
 const ROW_H = 32;
 
+const REST_DAY_BG = `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 6px)`;
+
 const formatHours = (h: number): string => {
   const hrs = Math.floor(h);
   const mins = Math.round((h - hrs) * 60);
@@ -49,7 +51,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   headerRow.style.cssText = `display:flex;background:#f3f4f6;border-bottom:2px solid #9ca3af;height:28px;`;
 
   const headerName = document.createElement('div');
-  headerName.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
+  headerName.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
   headerName.textContent = 'Employe';
   headerRow.appendChild(headerName);
 
@@ -77,6 +79,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
 
   employees.forEach((employee, idx) => {
     const schedule = schedules[`${employee.id}-${day}`] || {};
+    const isRestDay = schedule.isRestDay === true;
     const dailyH = calculateDailyHours(schedule);
     const isEven = idx % 2 === 0;
     const bgColor = isEven ? '#ffffff' : '#f9fafb';
@@ -85,47 +88,58 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
     row.style.cssText = `display:flex;height:${ROW_H}px;border-bottom:1px solid #e5e7eb;background:${bgColor};`;
 
     const nameCell = document.createElement('div');
-    nameCell.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:#111827;border-right:1px solid #e5e7eb;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;`;
+    nameCell.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#111827;border-right:1px solid #e5e7eb;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px;`;
     nameCell.textContent = employee.name;
     row.appendChild(nameCell);
 
     const timelineCell = document.createElement('div');
     timelineCell.style.cssText = `width:${timelineW}px;flex-shrink:0;position:relative;`;
 
-    for (let m = startMin; m <= endMin; m += 60) {
-      const offset = ((m - startMin) / totalMinutes) * timelineW;
-      const gridLine = document.createElement('div');
-      gridLine.style.cssText = `position:absolute;left:${offset}px;top:0;bottom:0;border-left:1px solid ${m === timeToMinutes('12:00') ? '#d1d5db' : '#f3f4f6'};`;
-      timelineCell.appendChild(gridLine);
+    if (isRestDay) {
+      // Rest day: hatched full-width bar
+      const restBar = document.createElement('div');
+      restBar.style.cssText = `position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;background:${REST_DAY_BG}, #e5e7eb;`;
+      const restLabel = document.createElement('span');
+      restLabel.style.cssText = 'font-size:9px;font-weight:700;color:#6b7280;';
+      restLabel.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
+      restBar.appendChild(restLabel);
+      timelineCell.appendChild(restBar);
+    } else {
+      for (let m = startMin; m <= endMin; m += 60) {
+        const offset = ((m - startMin) / totalMinutes) * timelineW;
+        const gridLine = document.createElement('div');
+        gridLine.style.cssText = `position:absolute;left:${offset}px;top:0;bottom:0;border-left:1px solid ${m === timeToMinutes('12:00') ? '#d1d5db' : '#f3f4f6'};`;
+        timelineCell.appendChild(gridLine);
+      }
+
+      const renderBar = (startKey: string, endKey: string, colorKey: string) => {
+        const s = schedule[startKey as keyof Schedule];
+        const e = schedule[endKey as keyof Schedule];
+        if (!s || !e) return;
+
+        const sMin = timeToMinutes(s);
+        const eMin = timeToMinutes(e);
+        const left = ((sMin - startMin) / totalMinutes) * timelineW;
+        const width = ((eMin - sMin) / totalMinutes) * timelineW;
+
+        const mc = findManagedColor(managedColors, schedule[colorKey as keyof Schedule]);
+        const hex = mc ? mc.hex : '#DBEAFE';
+        const textColor = mc ? getTextColorForHex(mc.hex) : '#1E3A8A';
+
+        const bar = document.createElement('div');
+        bar.style.cssText = `position:absolute;left:${left}px;width:${width}px;top:4px;height:${ROW_H - 8}px;background:${hex};border:1px solid ${hex};border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+
+        const text = document.createElement('span');
+        text.style.cssText = `font-size:8px;font-weight:600;color:${textColor};white-space:nowrap;`;
+        text.textContent = `${s} - ${e}`;
+        bar.appendChild(text);
+
+        timelineCell.appendChild(bar);
+      };
+
+      renderBar('morningStart', 'morningEnd', 'morningColor');
+      renderBar('afternoonStart', 'afternoonEnd', 'afternoonColor');
     }
-
-    const renderBar = (startKey: string, endKey: string, colorKey: string) => {
-      const s = schedule[startKey as keyof Schedule];
-      const e = schedule[endKey as keyof Schedule];
-      if (!s || !e) return;
-
-      const sMin = timeToMinutes(s);
-      const eMin = timeToMinutes(e);
-      const left = ((sMin - startMin) / totalMinutes) * timelineW;
-      const width = ((eMin - sMin) / totalMinutes) * timelineW;
-
-      const mc = findManagedColor(managedColors, schedule[colorKey as keyof Schedule]);
-      const hex = mc ? mc.hex : '#DBEAFE';
-      const textColor = mc ? getTextColorForHex(mc.hex) : '#1E3A8A';
-
-      const bar = document.createElement('div');
-      bar.style.cssText = `position:absolute;left:${left}px;width:${width}px;top:4px;height:${ROW_H - 8}px;background:${hex};border:1px solid ${hex};border-radius:4px;display:flex;align-items:center;padding:0 4px;overflow:hidden;`;
-
-      const text = document.createElement('span');
-      text.style.cssText = `font-size:8px;font-weight:600;color:${textColor};white-space:nowrap;`;
-      text.textContent = `${s} - ${e}`;
-      bar.appendChild(text);
-
-      timelineCell.appendChild(bar);
-    };
-
-    renderBar('morningStart', 'morningEnd', 'morningColor');
-    renderBar('afternoonStart', 'afternoonEnd', 'afternoonColor');
 
     row.appendChild(timelineCell);
 
@@ -141,7 +155,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   footerRow.style.cssText = `display:flex;height:28px;background:#f3f4f6;border-top:2px solid #9ca3af;`;
 
   const footerLabel = document.createElement('div');
-  footerLabel.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
+  footerLabel.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
   footerLabel.textContent = 'Total';
   footerRow.appendChild(footerLabel);
 
