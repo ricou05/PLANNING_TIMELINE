@@ -27,6 +27,11 @@ const PAD_V = 16;
 const TITLE_H = 35;
 const LEGEND_H = 32;
 
+// Fixed column widths matching web proportions
+const COL_EMPLOYEE = 100;
+const COL_PERIOD = 42;
+const COL_TOTAL = 56;
+
 const getColorHex = (managedColors: ManagedColor[], colorName?: string): string | null => {
   const mc = findManagedColor(managedColors, colorName);
   return mc ? mc.hex : null;
@@ -61,6 +66,8 @@ const buildLegend = (managedColors: ManagedColor[]): HTMLElement => {
   return legend;
 };
 
+const REST_DAY_BG = `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 6px)`;
+
 // ─── VUE 1 : tableau avec 2 lignes par employé ────────────────────────────────
 
 const createPDFTable = ({
@@ -80,7 +87,6 @@ const createPDFTable = ({
   const numRows = employees.length * 2 + 2; // header + footer
   const rowH = Math.floor(tableAvailH / numRows);
   const fontSize = Math.min(12, Math.max(8, Math.floor(rowH * 0.38)));
-  const cellPadV = Math.max(2, Math.floor((rowH - fontSize * 1.5) / 2));
 
   const container = document.createElement('div');
   container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
@@ -90,35 +96,60 @@ const createPDFTable = ({
   title.textContent = `Planning Semaine ${weekNumber} - ${year}`;
   container.appendChild(title);
 
+  // Calculate day column width: remaining space divided equally among 7 days
+  const fixedW = COL_EMPLOYEE + COL_PERIOD + (showTotal ? COL_TOTAL : 0);
+  const tableInnerW = A4_W - 2 * PAD_H;
+  const dayColW = Math.floor((tableInnerW - fixedW) / days.length);
+
   const table = document.createElement('table');
-  table.style.cssText = `width:100%;border-collapse:collapse;font-size:${fontSize}px;border:2px solid #1f2937;`;
+  table.style.cssText = `width:100%;border-collapse:collapse;font-size:${fontSize}px;border:2px solid #1f2937;table-layout:fixed;`;
+
+  // Colgroup for fixed proportions
+  const colgroup = document.createElement('colgroup');
+  const colEmp = document.createElement('col');
+  colEmp.style.width = `${COL_EMPLOYEE}px`;
+  colgroup.appendChild(colEmp);
+  const colPer = document.createElement('col');
+  colPer.style.width = `${COL_PERIOD}px`;
+  colgroup.appendChild(colPer);
+  days.forEach(() => {
+    const col = document.createElement('col');
+    col.style.width = `${dayColW}px`;
+    colgroup.appendChild(col);
+  });
+  if (showTotal) {
+    const colTot = document.createElement('col');
+    colTot.style.width = `${COL_TOTAL}px`;
+    colgroup.appendChild(colTot);
+  }
+  table.appendChild(colgroup);
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   headerRow.style.height = `${rowH}px`;
 
-  const thStyle = `padding:${cellPadV}px 4px;border:1px solid #374151;font-weight:700;text-align:center;background:#f3f4f6;color:#111827;`;
+  const thBase = `border:1px solid #374151;font-weight:700;text-align:center;vertical-align:middle;background:#f3f4f6;color:#111827;`;
 
   const thEmployee = document.createElement('th');
-  thEmployee.style.cssText = thStyle + 'width:100px;text-align:left;padding-left:8px;';
+  thEmployee.style.cssText = thBase + 'text-align:left;padding-left:6px;';
   thEmployee.textContent = 'Employe';
   headerRow.appendChild(thEmployee);
 
   const thPeriod = document.createElement('th');
-  thPeriod.style.cssText = thStyle + 'width:60px;';
-  thPeriod.textContent = 'Periode';
+  thPeriod.style.cssText = thBase + `font-size:${Math.max(7, fontSize - 2)}px;`;
+  thPeriod.textContent = 'Per.';
   headerRow.appendChild(thPeriod);
 
   days.forEach((day, i) => {
     const th = document.createElement('th');
-    th.style.cssText = thStyle;
+    th.style.cssText = thBase;
     th.innerHTML = `${day}<br><span style="font-size:${Math.max(7, fontSize - 2)}px;font-weight:400;color:#6b7280;">${dates[i]}</span>`;
     headerRow.appendChild(th);
   });
 
   if (showTotal) {
     const thTotal = document.createElement('th');
-    thTotal.style.cssText = thStyle + 'width:52px;';
+    thTotal.style.cssText = thBase;
     thTotal.textContent = 'Total';
     headerRow.appendChild(thTotal);
   }
@@ -127,45 +158,60 @@ const createPDFTable = ({
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  const cellStyle = `padding:${cellPadV}px 4px;border:1px solid #d1d5db;text-align:center;`;
+  const cellBase = `border:1px solid #d1d5db;text-align:center;vertical-align:middle;height:${rowH}px;`;
 
   employees.forEach((employee, empIndex) => {
     const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
     const bgColor = empIndex % 2 === 0 ? '' : 'background:#f9fafb;';
 
+    // Check rest days for this employee
+    const restDayFlags = days.map(day => {
+      const schedule = schedules[`${employee.id}-${day}`] || {};
+      return schedule.isRestDay === true;
+    });
+
     const morningRow = document.createElement('tr');
     morningRow.style.height = `${rowH}px`;
 
     const nameCell = document.createElement('td');
-    nameCell.style.cssText = cellStyle + 'text-align:left;font-weight:600;padding-left:8px;border-bottom:none;' + bgColor;
+    nameCell.style.cssText = cellBase + 'text-align:left;font-weight:600;padding-left:6px;border-bottom:none;' + bgColor;
     nameCell.textContent = employee.name;
     nameCell.rowSpan = 2;
     morningRow.appendChild(nameCell);
 
     const mLabel = document.createElement('td');
-    mLabel.style.cssText = cellStyle + `font-size:${Math.max(7, fontSize - 2)}px;color:#6b7280;border-bottom:none;` + bgColor;
-    mLabel.textContent = 'Matin';
+    mLabel.style.cssText = cellBase + `font-size:${Math.max(7, fontSize - 2)}px;color:#6b7280;border-bottom:none;` + bgColor;
+    mLabel.textContent = 'MAT';
     morningRow.appendChild(mLabel);
 
-    days.forEach(day => {
+    days.forEach((day, dayIdx) => {
       const schedule = schedules[`${employee.id}-${day}`] || {};
-      const td = document.createElement('td');
-      td.style.cssText = cellStyle + 'border-bottom:none;' + bgColor;
-      if (schedule.morningStart && schedule.morningEnd) {
-        td.textContent = `${schedule.morningStart} - ${schedule.morningEnd}`;
-        const hex = getColorHex(managedColors, schedule.morningColor);
-        if (hex) {
-          td.style.backgroundColor = hex;
-          td.style.color = getTextColor(managedColors, schedule.morningColor);
-          td.style.fontWeight = '500';
+      if (restDayFlags[dayIdx]) {
+        // Rest day: rowSpan=2, hatched background
+        const td = document.createElement('td');
+        td.rowSpan = 2;
+        td.style.cssText = cellBase + `background:#e5e7eb;background-image:${REST_DAY_BG};font-weight:700;color:#6b7280;font-size:${Math.max(7, fontSize - 1)}px;`;
+        td.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
+        morningRow.appendChild(td);
+      } else {
+        const td = document.createElement('td');
+        td.style.cssText = cellBase + 'border-bottom:none;' + bgColor;
+        if (schedule.morningStart && schedule.morningEnd) {
+          td.textContent = `${schedule.morningStart} - ${schedule.morningEnd}`;
+          td.style.fontWeight = '600';
+          const hex = getColorHex(managedColors, schedule.morningColor);
+          if (hex) {
+            td.style.backgroundColor = hex;
+            td.style.color = getTextColor(managedColors, schedule.morningColor);
+          }
         }
+        morningRow.appendChild(td);
       }
-      morningRow.appendChild(td);
     });
 
     if (showTotal) {
       const totalCell = document.createElement('td');
-      totalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;border-bottom:none;' + bgColor;
+      totalCell.style.cssText = cellBase + 'font-weight:700;color:#1d4ed8;border-bottom:none;' + bgColor;
       totalCell.textContent = formatHours(weeklyTotal);
       totalCell.rowSpan = 2;
       morningRow.appendChild(totalCell);
@@ -175,21 +221,22 @@ const createPDFTable = ({
     afternoonRow.style.height = `${rowH}px`;
 
     const aLabel = document.createElement('td');
-    aLabel.style.cssText = cellStyle + `font-size:${Math.max(7, fontSize - 2)}px;color:#6b7280;` + bgColor;
-    aLabel.textContent = 'Apres-midi';
+    aLabel.style.cssText = cellBase + `font-size:${Math.max(7, fontSize - 2)}px;color:#6b7280;` + bgColor;
+    aLabel.textContent = 'APM';
     afternoonRow.appendChild(aLabel);
 
-    days.forEach(day => {
+    days.forEach((day, dayIdx) => {
+      if (restDayFlags[dayIdx]) return; // already rendered as rowSpan=2
       const schedule = schedules[`${employee.id}-${day}`] || {};
       const td = document.createElement('td');
-      td.style.cssText = cellStyle + bgColor;
+      td.style.cssText = cellBase + bgColor;
       if (schedule.afternoonStart && schedule.afternoonEnd) {
         td.textContent = `${schedule.afternoonStart} - ${schedule.afternoonEnd}`;
+        td.style.fontWeight = '600';
         const hex = getColorHex(managedColors, schedule.afternoonColor);
         if (hex) {
           td.style.backgroundColor = hex;
           td.style.color = getTextColor(managedColors, schedule.afternoonColor);
-          td.style.fontWeight = '500';
         }
       }
       afternoonRow.appendChild(td);
@@ -203,7 +250,7 @@ const createPDFTable = ({
   footerRow.style.cssText = `background:#f3f4f6;height:${rowH}px;`;
 
   const totalLabel = document.createElement('td');
-  totalLabel.style.cssText = cellStyle + 'font-weight:700;text-align:left;padding-left:8px;background:#f3f4f6;';
+  totalLabel.style.cssText = cellBase + 'font-weight:700;text-align:left;padding-left:6px;background:#f3f4f6;';
   totalLabel.colSpan = 2;
   totalLabel.textContent = 'Total / jour';
   footerRow.appendChild(totalLabel);
@@ -211,7 +258,7 @@ const createPDFTable = ({
   let grandTotal = 0;
   days.forEach(day => {
     const td = document.createElement('td');
-    td.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
+    td.style.cssText = cellBase + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
     let dayTotal = 0;
     employees.forEach(emp => {
       const schedule = schedules[`${emp.id}-${day}`];
@@ -224,7 +271,7 @@ const createPDFTable = ({
 
   if (showTotal) {
     const grandTotalCell = document.createElement('td');
-    grandTotalCell.style.cssText = cellStyle + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
+    grandTotalCell.style.cssText = cellBase + 'font-weight:700;color:#1d4ed8;background:#f3f4f6;';
     grandTotalCell.textContent = formatHours(grandTotal);
     footerRow.appendChild(grandTotalCell);
   }
@@ -276,7 +323,6 @@ const createVisualPDFTable = ({
   const rowH = Math.floor(tableAvailH / numRows);
   const fontSize = Math.min(13, Math.max(9, Math.floor(rowH * 0.22)));
   const blockFontSize = Math.min(12, Math.max(9, Math.floor(rowH * 0.20)));
-  const cellPadV = Math.max(3, Math.floor((rowH - fontSize * 1.5) / 2));
 
   const container = document.createElement('div');
   container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
@@ -286,31 +332,55 @@ const createVisualPDFTable = ({
   title.textContent = `Planning Semaine ${weekNumber} - ${year}`;
   container.appendChild(title);
 
+  // Calculate day column width: remaining space divided equally among 7 days
+  const v2EmpW = 110;
+  const v2TotalW = 60;
+  const fixedW2 = v2EmpW + (showTotal ? v2TotalW : 0);
+  const tableInnerW = A4_W - 2 * PAD_H;
+  const dayColW = Math.floor((tableInnerW - fixedW2) / days.length);
+
   const table = document.createElement('table');
-  table.style.cssText = `width:100%;border-collapse:collapse;font-size:${fontSize}px;border:2px solid #1f2937;`;
+  table.style.cssText = `width:100%;border-collapse:collapse;font-size:${fontSize}px;border:2px solid #1f2937;table-layout:fixed;`;
+
+  // Colgroup for fixed proportions
+  const colgroup = document.createElement('colgroup');
+  const colEmp = document.createElement('col');
+  colEmp.style.width = `${v2EmpW}px`;
+  colgroup.appendChild(colEmp);
+  days.forEach(() => {
+    const col = document.createElement('col');
+    col.style.width = `${dayColW}px`;
+    colgroup.appendChild(col);
+  });
+  if (showTotal) {
+    const colTot = document.createElement('col');
+    colTot.style.width = `${v2TotalW}px`;
+    colgroup.appendChild(colTot);
+  }
+  table.appendChild(colgroup);
 
   // Header
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   headerRow.style.height = `${rowH}px`;
 
-  const thStyle = `padding:${cellPadV}px 4px;border:1px solid #374151;font-weight:700;text-align:center;background:#f3f4f6;color:#111827;`;
+  const thBase = `border:1px solid #374151;font-weight:700;text-align:center;vertical-align:middle;background:#f3f4f6;color:#111827;`;
 
   const thEmployee = document.createElement('th');
-  thEmployee.style.cssText = thStyle + 'width:110px;text-align:left;padding-left:8px;';
+  thEmployee.style.cssText = thBase + 'text-align:left;padding-left:8px;';
   thEmployee.textContent = 'Employe';
   headerRow.appendChild(thEmployee);
 
   days.forEach((day, i) => {
     const th = document.createElement('th');
-    th.style.cssText = thStyle;
+    th.style.cssText = thBase;
     th.innerHTML = `${day}<br><span style="font-size:${Math.max(7, fontSize - 2)}px;font-weight:400;color:#6b7280;">${dates[i]}</span>`;
     headerRow.appendChild(th);
   });
 
   if (showTotal) {
     const thTotal = document.createElement('th');
-    thTotal.style.cssText = thStyle + 'width:60px;';
+    thTotal.style.cssText = thBase;
     thTotal.textContent = 'Total';
     headerRow.appendChild(thTotal);
   }
@@ -320,7 +390,7 @@ const createVisualPDFTable = ({
 
   // Body
   const tbody = document.createElement('tbody');
-  const cellStyle = `padding:3px 4px;border:1px solid #d1d5db;vertical-align:middle;height:${rowH}px;`;
+  const cellBase = `border:1px solid #d1d5db;vertical-align:middle;text-align:center;height:${rowH}px;`;
 
   employees.forEach((employee, empIndex) => {
     const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
@@ -330,25 +400,31 @@ const createVisualPDFTable = ({
     tr.style.cssText = `height:${rowH}px;background:${rowBg};`;
 
     const nameCell = document.createElement('td');
-    nameCell.style.cssText = `${cellStyle}font-weight:600;color:#1f2937;padding-left:8px;background:${rowBg};`;
+    nameCell.style.cssText = `${cellBase}font-weight:600;color:#1f2937;padding-left:8px;text-align:left;background:${rowBg};`;
     nameCell.textContent = employee.name;
     tr.appendChild(nameCell);
 
     days.forEach(day => {
       const schedule = schedules[`${employee.id}-${day}`];
       const td = document.createElement('td');
-      td.style.cssText = `${cellStyle}background:${rowBg};`;
+      td.style.cssText = `${cellBase}background:${rowBg};padding:3px 4px;`;
 
+      const isRestDay = schedule?.isRestDay === true;
       const hasMorning = schedule?.morningStart && schedule?.morningEnd;
       const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
 
-      if (!hasMorning && !hasAfternoon) {
-        td.style.textAlign = 'center';
+      if (isRestDay) {
+        td.style.background = `${REST_DAY_BG}, #e5e7eb`;
+        td.style.fontWeight = '700';
+        td.style.color = '#6b7280';
+        td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
+        td.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
+      } else if (!hasMorning && !hasAfternoon) {
         td.style.color = '#d1d5db';
         td.textContent = '—';
       } else {
         const inner = document.createElement('div');
-        inner.style.cssText = 'display:flex;flex-direction:column;gap:2px;justify-content:center;height:100%;';
+        inner.style.cssText = 'display:flex;flex-direction:column;gap:2px;justify-content:center;align-items:center;height:100%;';
         if (hasMorning) {
           inner.appendChild(buildShiftBlock(schedule!.morningStart, schedule!.morningEnd, schedule!.morningColor, managedColors, blockFontSize));
         }
@@ -363,7 +439,7 @@ const createVisualPDFTable = ({
 
     if (showTotal) {
       const totalCell = document.createElement('td');
-      totalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:${rowBg};`;
+      totalCell.style.cssText = `${cellBase}font-weight:700;color:#1d4ed8;background:${rowBg};`;
       totalCell.textContent = weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—';
       tr.appendChild(totalCell);
     }
@@ -376,14 +452,14 @@ const createVisualPDFTable = ({
   footerRow.style.cssText = `background:#e5e7eb;height:${rowH}px;`;
 
   const totalLabel = document.createElement('td');
-  totalLabel.style.cssText = `${cellStyle}font-weight:700;text-align:left;padding-left:8px;background:#e5e7eb;`;
+  totalLabel.style.cssText = `${cellBase}font-weight:700;text-align:left;padding-left:8px;background:#e5e7eb;`;
   totalLabel.textContent = 'TOTAUX';
   footerRow.appendChild(totalLabel);
 
   let grandTotal = 0;
   days.forEach(day => {
     const td = document.createElement('td');
-    td.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
+    td.style.cssText = `${cellBase}font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
     let dayTotal = 0;
     employees.forEach(emp => {
       const schedule = schedules[`${emp.id}-${day}`];
@@ -396,7 +472,7 @@ const createVisualPDFTable = ({
 
   if (showTotal) {
     const grandTotalCell = document.createElement('td');
-    grandTotalCell.style.cssText = `${cellStyle}text-align:center;font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
+    grandTotalCell.style.cssText = `${cellBase}font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
     grandTotalCell.textContent = grandTotal > 0 ? `${grandTotal.toFixed(1)}h` : '—';
     footerRow.appendChild(grandTotalCell);
   }
