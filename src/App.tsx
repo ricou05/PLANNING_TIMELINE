@@ -417,19 +417,17 @@ function App() {
               onClick={undo}
               disabled={!canUndo}
               title="Annuler (Ctrl+Z)"
-              className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center w-9 h-9 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Undo2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Annuler</span>
+              <Undo2 className="w-5 h-5" />
             </button>
             <button
               onClick={redo}
               disabled={!canRedo}
               title="Rétablir (Ctrl+Y)"
-              className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center w-9 h-9 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Redo2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Rétablir</span>
+              <Redo2 className="w-5 h-5" />
             </button>
             <CSVImport onImport={handleCSVImport} existingEmployees={employees} managedColors={managedColors} />
             <CSVExportButton
