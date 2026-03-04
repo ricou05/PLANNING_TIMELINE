@@ -3,7 +3,6 @@ import { Download, Copy, ClipboardPaste, X } from 'lucide-react';
 import TimeInput from './TimeInput';
 import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
-import ColorLegends from './ColorLegends';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
@@ -308,45 +307,49 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
         )}
       </div>
 
-      <ColorLegends managedColors={managedColors} />
-
       <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse">
+        <table className="w-full border-collapse table-fixed">
+          <colgroup>
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '46px' }} />
+            {days.map(d => <col key={d} />)}
+            <col style={{ width: '80px' }} />
+          </colgroup>
           <thead>
             <tr className="bg-gray-50">
-              <th className="border-b-4 border-black p-2 w-[120px] font-bold border-r-4 border-r-black">EMPLOYE</th>
-              <th className="border-b-4 border-black p-2 w-[60px] font-bold border-r-4 border-r-black">PER.</th>
+              <th className="border-b-4 border-black p-2 font-bold border-r-4 border-r-black">EMPLOYE</th>
+              <th className="border-b-4 border-black p-1 font-bold border-r-4 border-r-black text-xs">PER.</th>
               {days.map((day, index) => (
-                <th key={day} className="border-b-4 border-black p-2 border-r-4 border-r-black">
+                <th key={day} className="border-b-4 border-black p-1 border-r-4 border-r-black">
                   <div className="text-center">
-                    <div className="font-bold">{day}</div>
-                    <div className="text-sm text-gray-500">{dates[index]}</div>
-                    <div className="flex items-center justify-center gap-1 mt-1">
+                    <div className="font-bold text-sm">{day}</div>
+                    <div className="text-xs text-gray-500">{dates[index]}</div>
+                    <div className="flex items-center justify-center gap-1 mt-0.5">
                       <button
                         onClick={() => onCopyDay(day)}
                         title={`Copier ${day}`}
-                        className={`p-1 rounded transition-colors ${
+                        className={`p-0.5 rounded transition-colors ${
                           copiedDay === day
                             ? 'bg-blue-100 text-blue-700'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                         }`}
                       >
-                        <Copy className="w-3.5 h-3.5" />
+                        <Copy className="w-3 h-3" />
                       </button>
                       {copiedDay && copiedDay !== day && (
                         <button
                           onClick={() => onPasteDay(day)}
                           title={`Coller depuis ${copiedDay}`}
-                          className="p-1 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                          className="p-0.5 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                         >
-                          <ClipboardPaste className="w-3.5 h-3.5" />
+                          <ClipboardPaste className="w-3 h-3" />
                         </button>
                       )}
                     </div>
                   </div>
                 </th>
               ))}
-              <th className="border-b-4 border-black p-2 w-[80px] font-bold">TOTAL SEM.</th>
+              <th className="border-b-4 border-black p-1 font-bold text-xs">TOTAL SEM.</th>
             </tr>
           </thead>
           <tbody>
