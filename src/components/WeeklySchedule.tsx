@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Download, Copy, ClipboardPaste, X } from 'lucide-react';
 import TimeInput from './TimeInput';
 import { Employee, Schedule, ManagedColor } from '../types';
 import ColorPicker from './ColorPicker';
 import ColorLegends from './ColorLegends';
 import DraggableEmployeeList from './DraggableEmployeeList';
-import { findManagedColor } from '../utils/colorUtils';
+import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
 import { exportToPDF } from '../utils/pdfExport';
@@ -38,6 +38,12 @@ const REST_DAY_STRIPES = `repeating-linear-gradient(
   rgba(0,0,0,0.06) 8px
 )`;
 
+interface EditingCell {
+  employeeId: number;
+  day: string;
+  period: 'morning' | 'afternoon';
+}
+
 const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   employees,
   days,
@@ -61,6 +67,20 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   const [selectedColor, setSelectedColor] = useState('bleu');
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [restDayDragOverCell, setRestDayDragOverCell] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const editRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editRef.current && !editRef.current.contains(e.target as Node)) {
+        setEditingCell(null);
+      }
+    };
+    if (editingCell) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingCell]);
 
   const handleExportPDF = async (options: PDFExportOptions) => {
     setShowPDFModal(false);
@@ -122,39 +142,142 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     }
   };
 
-  const getCellStyle = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): React.CSSProperties => {
-    if (!schedule) return {};
+  const getCellColors = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): { bg: string; text: string } => {
+    if (!schedule) return { bg: '', text: '' };
     const start = schedule[`${period}Start`];
     const end = schedule[`${period}End`];
     const color = schedule[`${period}Color`];
-    if (!start || !end || !color) return {};
+    if (!start || !end || !color) return { bg: '', text: '' };
     const mc = findManagedColor(managedColors, color);
-    if (!mc) return {};
-    return { backgroundColor: mc.hex };
+    if (!mc) return { bg: '', text: '' };
+    return { bg: mc.hex, text: getTextColorForHex(mc.hex) };
   };
 
-  const renderRestDayCell = (employeeId: number, day: string, isMorning: boolean) => {
+  const handleCellClick = (employeeId: number, day: string, period: 'morning' | 'afternoon') => {
+    setEditingCell({ employeeId, day, period });
+  };
+
+  const handleDeletePeriod = (e: React.MouseEvent, employeeId: number, day: string, period: 'morning' | 'afternoon') => {
+    e.stopPropagation();
+    onScheduleChange(employeeId, day, `${period}Start`, '');
+    onScheduleChange(employeeId, day, `${period}End`, '');
+    onScheduleChange(employeeId, day, `${period}Color`, '');
+    setEditingCell(null);
+  };
+
+  const isEditing = (employeeId: number, day: string, period: 'morning' | 'afternoon') => {
+    return editingCell?.employeeId === employeeId && editingCell?.day === day && editingCell?.period === period;
+  };
+
+  const renderScheduleCell = (employee: Employee, day: string, period: 'morning' | 'afternoon') => {
+    const schedule = schedules[`${employee.id}-${day}`] || {};
+    const startKey = `${period}Start` as keyof Schedule;
+    const endKey = `${period}End` as keyof Schedule;
+    const start = schedule[startKey] as string || '';
+    const end = schedule[endKey] as string || '';
+    const colors = getCellColors(schedule, period);
+    const hasTime = start && end;
+    const editing = isEditing(employee.id, day, period);
+
+    if (editing) {
+      return (
+        <div
+          ref={editRef}
+          className="flex gap-1 items-center justify-center h-full py-0.5"
+          style={hasTime ? { backgroundColor: colors.bg } : {}}
+        >
+          <TimeInput
+            value={start}
+            onChange={(value) => {
+              onScheduleChange(employee.id, day, startKey, value);
+              if (value && !schedule[`${period}Color`]) {
+                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
+              }
+            }}
+            placeholder=":"
+            minTime="06:30"
+            maxTime="20:00"
+          />
+          <span className="text-black font-medium">-</span>
+          <TimeInput
+            value={end}
+            onChange={(value) => {
+              onScheduleChange(employee.id, day, endKey, value);
+              if (value && !schedule[`${period}Color`]) {
+                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
+              }
+            }}
+            placeholder=":"
+            minTime="06:30"
+            maxTime="20:00"
+          />
+          {hasTime && (
+            <button
+              onClick={(e) => handleDeletePeriod(e, employee.id, day, period)}
+              className="p-0.5 rounded hover:bg-red-100 transition-colors"
+              title="Supprimer"
+            >
+              <X className="w-3 h-3 text-red-500" />
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (hasTime) {
+      return (
+        <div
+          className="flex items-center justify-center h-full cursor-pointer group relative"
+          style={{ backgroundColor: colors.bg }}
+          onClick={() => handleCellClick(employee.id, day, period)}
+        >
+          <span
+            className="text-xs font-semibold whitespace-nowrap"
+            style={{ color: colors.text }}
+          >
+            {start} - {end}
+          </span>
+          <button
+            onClick={(e) => handleDeletePeriod(e, employee.id, day, period)}
+            className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-all"
+          >
+            <X className="w-3 h-3 text-red-500" />
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div
-        className="flex items-center justify-center h-full min-h-[32px] relative"
+        className="flex items-center justify-center h-full cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => handleCellClick(employee.id, day, period)}
+      >
+        <span className="text-xs text-gray-300 font-medium">: - :</span>
+      </div>
+    );
+  };
+
+  const renderRestDayCell = (employeeId: number, day: string) => {
+    return (
+      <td
+        rowSpan={2}
+        className="border-r-4 border-r-black relative"
         style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
       >
-        {isMorning ? (
+        <div className="flex items-center justify-center h-full min-h-[64px]">
           <div className="flex items-center gap-1">
             <X className="w-4 h-4 text-red-500" strokeWidth={3} />
             <span className="text-xs font-bold text-gray-500 uppercase">Repos</span>
-            <button
-              onClick={() => onToggleRestDay(employeeId, day, false)}
-              className="absolute top-0 right-0 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
-              title="Retirer le jour de repos"
-            >
-              <X className="w-3 h-3" />
-            </button>
           </div>
-        ) : (
-          <X className="w-4 h-4 text-red-400" strokeWidth={2.5} />
-        )}
-      </div>
+          <button
+            onClick={() => onToggleRestDay(employeeId, day, false)}
+            className="absolute top-1 right-1 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+            title="Retirer le jour de repos"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      </td>
     );
   };
 
@@ -166,6 +289,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           onColorChange={setSelectedColor}
           managedColors={managedColors}
           onManageClick={onManageColorsClick}
+          showRestDayButton
         />
 
         <button
@@ -184,14 +308,14 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
         )}
       </div>
 
-      <ColorLegends managedColors={managedColors} showRestDayButton={true} />
+      <ColorLegends managedColors={managedColors} />
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-gray-50">
               <th className="border-b-4 border-black p-2 w-[120px] font-bold border-r-4 border-r-black">EMPLOYE</th>
-              <th className="border-b-4 border-black p-2 w-[80px] font-bold border-r-4 border-r-black">PERIODE</th>
+              <th className="border-b-4 border-black p-2 w-[60px] font-bold border-r-4 border-r-black">PER.</th>
               {days.map((day, index) => (
                 <th key={day} className="border-b-4 border-black p-2 border-r-4 border-r-black">
                   <div className="text-center">
@@ -222,22 +346,29 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                   </div>
                 </th>
               ))}
-              <th className="border-b-4 border-black p-2 w-[100px] font-bold">TOTAL SEMAINE</th>
+              <th className="border-b-4 border-black p-2 w-[80px] font-bold">TOTAL SEM.</th>
             </tr>
           </thead>
           <tbody>
             {employees.map((employee, index) => {
               const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
+              const restDays = days.map(day => {
+                const schedule = schedules[`${employee.id}-${day}`] || {};
+                return schedule.isRestDay === true;
+              });
 
               return (
                 <React.Fragment key={employee.id}>
-                  <tr className={`group hover:bg-gray-50 ${
-                    dragOverEmployeeIndex === index ? 'border-t-4 border-[#063971]' : ''
-                  }`}
-                  draggable
-                  onDragStart={() => handleEmployeeDragStart(index)}
-                  onDragOver={(e) => handleEmployeeDragOver(e, index)}
-                  onDrop={handleEmployeeDrop}>
+                  {/* Morning row */}
+                  <tr
+                    className={`${
+                      dragOverEmployeeIndex === index ? 'border-t-4 border-[#063971]' : ''
+                    }`}
+                    draggable
+                    onDragStart={() => handleEmployeeDragStart(index)}
+                    onDragOver={(e) => handleEmployeeDragOver(e, index)}
+                    onDrop={handleEmployeeDrop}
+                  >
                     <td rowSpan={2} className="border-r-4 border-r-black align-middle bg-white">
                       <DraggableEmployeeList
                         employee={employee}
@@ -250,58 +381,29 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                         onDelete={onEmployeeDelete}
                       />
                     </td>
-                    <td className="border-r-4 border-r-black text-center h-8 bg-white">
-                      <span className="text-[0.85em] font-medium">Matin</span>
+                    <td className="border-r-4 border-r-black text-center h-8 bg-white px-1">
+                      <span className="text-[0.75em] font-medium text-gray-500">MAT</span>
                     </td>
-                    {days.map((day) => {
-                      const schedule = schedules[`${employee.id}-${day}`] || {};
-                      const isRestDay = schedule.isRestDay === true;
+                    {days.map((day, dayIdx) => {
+                      const isRestDay = restDays[dayIdx];
                       const cellKey = `${employee.id}-${day}`;
                       const isDragOver = restDayDragOverCell === cellKey;
-                      const cellStyle = isRestDay ? {} : getCellStyle(schedule, 'morning');
+
+                      if (isRestDay) {
+                        return renderRestDayCell(employee.id, day);
+                      }
 
                       return (
                         <td
                           key={`${employee.id}-${day}-morning`}
-                          className={`border-r-4 border-r-black h-8 transition-colors ${
+                          className={`border-r-4 border-r-black h-8 p-0 transition-colors ${
                             isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
                           }`}
-                          style={isRestDay ? {} : cellStyle}
                           onDragOver={(e) => handleRestDayDragOver(e, cellKey)}
                           onDragLeave={handleRestDayDragLeave}
                           onDrop={(e) => handleRestDayDrop(e, employee.id, day)}
                         >
-                          {isRestDay ? (
-                            renderRestDayCell(employee.id, day, true)
-                          ) : (
-                            <div className="flex gap-1 items-center justify-center">
-                              <TimeInput
-                                value={schedule.morningStart || ''}
-                                onChange={(value) => {
-                                  onScheduleChange(employee.id, day, 'morningStart', value);
-                                  if (value && !schedule.morningColor) {
-                                    onScheduleChange(employee.id, day, 'morningColor', selectedColor);
-                                  }
-                                }}
-                                placeholder=":"
-                                minTime="06:30"
-                                maxTime="20:00"
-                              />
-                              <span className="text-black font-medium">-</span>
-                              <TimeInput
-                                value={schedule.morningEnd || ''}
-                                onChange={(value) => {
-                                  onScheduleChange(employee.id, day, 'morningEnd', value);
-                                  if (value && !schedule.morningColor) {
-                                    onScheduleChange(employee.id, day, 'morningColor', selectedColor);
-                                  }
-                                }}
-                                placeholder=":"
-                                minTime="06:30"
-                                maxTime="20:00"
-                              />
-                            </div>
-                          )}
+                          {renderScheduleCell(employee, day, 'morning')}
                         </td>
                       );
                     })}
@@ -309,61 +411,32 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                       {weeklyTotal.toFixed(2)}h
                     </td>
                   </tr>
-                  <tr className={`group border-b-4 border-b-black hover:bg-gray-50 ${
-                    dragOverEmployeeIndex === index ? 'border-b-4 border-b-[#063971]' : ''
-                  } border-t border-t-gray-300`}>
-                    <td className="border-r-4 border-r-black text-center h-8 bg-white">
-                      <span className="text-[0.85em] font-medium">Apres-midi</span>
+                  {/* Afternoon row */}
+                  <tr
+                    className={`border-b-4 border-b-black ${
+                      dragOverEmployeeIndex === index ? 'border-b-4 border-b-[#063971]' : ''
+                    } border-t border-t-gray-300`}
+                  >
+                    <td className="border-r-4 border-r-black text-center h-8 bg-white px-1">
+                      <span className="text-[0.75em] font-medium text-gray-500">APM</span>
                     </td>
-                    {days.map((day) => {
-                      const schedule = schedules[`${employee.id}-${day}`] || {};
-                      const isRestDay = schedule.isRestDay === true;
+                    {days.map((day, dayIdx) => {
+                      const isRestDay = restDays[dayIdx];
+                      if (isRestDay) return null; // already rendered as rowSpan=2
                       const cellKey = `${employee.id}-${day}`;
                       const isDragOver = restDayDragOverCell === cellKey;
-                      const cellStyle = isRestDay ? {} : getCellStyle(schedule, 'afternoon');
 
                       return (
                         <td
                           key={`${employee.id}-${day}-afternoon`}
-                          className={`border-r-4 border-r-black h-8 transition-colors ${
+                          className={`border-r-4 border-r-black h-8 p-0 transition-colors ${
                             isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
                           }`}
-                          style={isRestDay ? {} : cellStyle}
                           onDragOver={(e) => handleRestDayDragOver(e, cellKey)}
                           onDragLeave={handleRestDayDragLeave}
                           onDrop={(e) => handleRestDayDrop(e, employee.id, day)}
                         >
-                          {isRestDay ? (
-                            renderRestDayCell(employee.id, day, false)
-                          ) : (
-                            <div className="flex gap-1 items-center justify-center">
-                              <TimeInput
-                                value={schedule.afternoonStart || ''}
-                                onChange={(value) => {
-                                  onScheduleChange(employee.id, day, 'afternoonStart', value);
-                                  if (value && !schedule.afternoonColor) {
-                                    onScheduleChange(employee.id, day, 'afternoonColor', selectedColor);
-                                  }
-                                }}
-                                placeholder=":"
-                                minTime="06:30"
-                                maxTime="20:00"
-                              />
-                              <span className="text-black font-medium">-</span>
-                              <TimeInput
-                                value={schedule.afternoonEnd || ''}
-                                onChange={(value) => {
-                                  onScheduleChange(employee.id, day, 'afternoonEnd', value);
-                                  if (value && !schedule.afternoonColor) {
-                                    onScheduleChange(employee.id, day, 'afternoonColor', selectedColor);
-                                  }
-                                }}
-                                placeholder=":"
-                                minTime="06:30"
-                                maxTime="20:00"
-                              />
-                            </div>
-                          )}
+                          {renderScheduleCell(employee, day, 'afternoon')}
                         </td>
                       );
                     })}
