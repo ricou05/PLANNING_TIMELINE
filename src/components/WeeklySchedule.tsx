@@ -312,7 +312,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <colgroup>
             <col style={{ width: '120px' }} />
             <col style={{ width: '46px' }} />
-            {days.map(d => <col key={d} />)}
+            {days.map(d => <col key={d} style={{ width: '10.2%' }} />)}
             <col style={{ width: '80px' }} />
           </colgroup>
           <thead>

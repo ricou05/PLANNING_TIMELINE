@@ -364,7 +364,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                 <th
                   key={day}
                   className="border border-gray-300 px-2 py-2 text-center font-bold text-gray-700"
-                  style={{ minWidth: 140 }}
+                  style={{ minWidth: 119 }}
                 >
                   <div className="text-sm">{day}</div>
                   <div className="text-xs font-normal text-gray-500">{dates[i]}</div>
