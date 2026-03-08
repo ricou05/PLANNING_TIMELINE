@@ -93,12 +93,26 @@ export const parseCSV = (
         const endIndex = 3 + (dayIndex * colsPerDay);
         const colorIndex = hasColorColumns ? 4 + (dayIndex * colsPerDay) : -1;
 
-        if (startIndex < cells.length && endIndex < cells.length) {
+        if (startIndex < cells.length) {
           const startTime = cells[startIndex].trim();
-          const endTime = cells[endIndex].trim();
-          const colorValue = (hasColorColumns && importColors && colorIndex < cells.length)
+          const endTime = endIndex < cells.length ? cells[endIndex].trim() : '';
+          const colorValue = (hasColorColumns && importColors && colorIndex >= 0 && colorIndex < cells.length)
             ? cells[colorIndex].trim()
             : '';
+
+          // Detect rest day marker (only on morning row)
+          if (periodType === 'matin' && startTime.toUpperCase() === 'REPOS') {
+            const scheduleKey = `${currentEmployeeId}-${day}`;
+            result.schedules[scheduleKey] = {
+              morningStart: '',
+              morningEnd: '',
+              afternoonStart: '',
+              afternoonEnd: '',
+              isRestDay: true
+            };
+            result.importedCount++;
+            continue;
+          }
 
           if (startTime && endTime &&
               (startTime !== '00:00' || endTime !== '00:00') &&
@@ -117,10 +131,15 @@ export const parseCSV = (
               };
             }
 
+            // Skip if this day is already marked as rest day
+            if (result.schedules[scheduleKey].isRestDay) {
+              continue;
+            }
+
             result.schedules[scheduleKey][`${period}Start`] = startTime;
             result.schedules[scheduleKey][`${period}End`] = endTime;
 
-            if (hasColorColumns && importColors && colorValue) {
+            if (colorValue) {
               result.schedules[scheduleKey][`${period}Color`] = managedColors.length > 0
                 ? normalizeColorId(colorValue, managedColors)
                 : colorValue;

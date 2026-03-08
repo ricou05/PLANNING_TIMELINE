@@ -33,7 +33,14 @@ export const generateCSV = (
       const key = `${emp.id}-${day}`;
       const schedule = schedules[key];
 
-      if (schedule) {
+      if (schedule && schedule.isRestDay) {
+        morningCells.push('REPOS', '');
+        afternoonCells.push('', '');
+        if (includeColors) {
+          morningCells.push('');
+          afternoonCells.push('');
+        }
+      } else if (schedule) {
         morningCells.push(schedule.morningStart || '00:00', schedule.morningEnd || '00:00');
         afternoonCells.push(schedule.afternoonStart || '00:00', schedule.afternoonEnd || '00:00');
         if (includeColors) {
