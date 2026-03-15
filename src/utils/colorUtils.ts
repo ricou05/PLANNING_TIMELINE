@@ -1,13 +1,13 @@
 import { ManagedColor } from '../types';
 
 export const DEFAULT_MANAGED_COLORS: ManagedColor[] = [
-  { id: 'jaune', hex: '#F4C300', label: 'St Pierre' },
-  { id: 'rouge', hex: '#CC0605', label: 'Boucherie' },
-  { id: 'bleu', hex: '#063971', label: 'ELS' },
+  { id: 'bleu ciel', hex: '#87CEEB', label: 'Caissier 1' },
+  { id: 'orange', hex: '#FF7F00', label: 'Caissier 2' },
+  { id: 'vert clair', hex: '#90EE90', label: 'Caissier 3' },
   { id: 'vert', hex: '#317F43', label: 'F&L' },
-  { id: 'bleu ciel', hex: '#87CEEB', label: 'Caisse 1' },
-  { id: 'orange', hex: '#FF7F00', label: 'Caisse 2' },
-  { id: 'violet', hex: '#A03472', label: 'Caisse 3' },
+  { id: 'rouge', hex: '#CC0605', label: 'Boucherie' },
+  { id: 'jaune', hex: '#F4C300', label: 'St Pierre' },
+  { id: 'bleu', hex: '#063971', label: 'ELS' },
 ];
 
 export const isLightColor = (hex: string): boolean => {
@@ -24,12 +24,12 @@ export const getTextColorForHex = (hex: string): string => {
 
 const COLOR_ALIASES: Record<string, string[]> = {
   'bleu': ['bleu fonce', 'bleu foncé', 'bleu-fonce', 'blue dark', 'dark blue'],
-  'bleu ciel': ['bleu clair', 'bleu-clair', 'light blue', 'cyan', 'bleu-ciel'],
+  'bleu ciel': ['bleu-ciel', 'light blue', 'cyan'],
+  'vert clair': ['vert-clair', 'lime', 'light green', 'violet', 'purple'],
   'rouge': ['red'],
   'vert': ['green'],
   'jaune': ['yellow'],
   'orange': ['orange'],
-  'violet': ['purple', 'rose'],
 };
 
 export const normalizeColorId = (input: string, colors: ManagedColor[]): string => {
