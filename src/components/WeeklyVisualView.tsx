@@ -4,7 +4,6 @@ import { Employee, Schedule, ManagedColor } from '../types';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
-import ColorLegends from './ColorLegends';
 import ColorPicker from './ColorPicker';
 import TimeInput from './TimeInput';
 import { exportVisualToPDF } from '../utils/pdfExport';
@@ -329,6 +328,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
           onColorChange={setSelectedColor}
           managedColors={managedColors}
           onManageClick={onManageColorsClick}
+          showRestDayButton={true}
         />
 
         <button
@@ -347,8 +347,6 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
           />
         )}
       </div>
-
-      <ColorLegends managedColors={managedColors} showRestDayButton={true} />
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-sm">
