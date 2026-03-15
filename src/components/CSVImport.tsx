@@ -226,7 +226,7 @@ Marie;Matin;08:00;12:00;...
                   <h4 className="text-xs font-semibold text-gray-700 mt-3 mb-1">Avec couleurs — 3 colonnes par jour :</h4>
                   <p className="text-xs text-gray-500 mb-1">
                     Ajouter une colonne COULEUR après chaque paire DEBUT;FIN.
-                    Couleurs disponibles : <b>bleu ciel</b> (Caissier 1), <b>orange</b> (Caissier 2), <b>vert clair</b> (Caissier 3), <b>vert</b> (F&L), <b>rouge</b> (Boucherie), <b>jaune</b> (St Pierre), <b>bleu</b> (ELS).
+                    Couleurs disponibles : <b>bleu ciel</b> (Caissier 1), <b>orange</b> (Caissier 2), <b>violet</b> (Caissier 3), <b>vert</b> (F&L), <b>rouge</b> (Boucherie), <b>jaune</b> (St Pierre), <b>bleu</b> (ELS).
                     Laisser vide si aucune couleur souhaitée.
                   </p>
                   <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap bg-white p-2 rounded border border-gray-200">
