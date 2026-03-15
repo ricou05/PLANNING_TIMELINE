@@ -3,7 +3,7 @@ import { ManagedColor } from '../types';
 export const DEFAULT_MANAGED_COLORS: ManagedColor[] = [
   { id: 'bleu ciel', hex: '#87CEEB', label: 'Caissier 1' },
   { id: 'orange', hex: '#FF7F00', label: 'Caissier 2' },
-  { id: 'vert clair', hex: '#90EE90', label: 'Caissier 3' },
+  { id: 'violet', hex: '#A03472', label: 'Caissier 3' },
   { id: 'vert', hex: '#317F43', label: 'F&L' },
   { id: 'rouge', hex: '#CC0605', label: 'Boucherie' },
   { id: 'jaune', hex: '#F4C300', label: 'St Pierre' },
@@ -25,7 +25,7 @@ export const getTextColorForHex = (hex: string): string => {
 const COLOR_ALIASES: Record<string, string[]> = {
   'bleu': ['bleu fonce', 'bleu foncé', 'bleu-fonce', 'blue dark', 'dark blue'],
   'bleu ciel': ['bleu-ciel', 'light blue', 'cyan'],
-  'vert clair': ['vert-clair', 'lime', 'light green', 'violet', 'purple'],
+  'violet': ['purple', 'rose', 'vert clair', 'vert-clair'],
   'rouge': ['red'],
   'vert': ['green'],
   'jaune': ['yellow'],
