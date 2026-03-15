@@ -186,6 +186,14 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees, mana
 Nicolas;Matin;07:45;11:00;07:00;12:00;...
 ;Apres-Midi;00:00;00:00;16:00;19:30;...`}
                   </pre>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2 mt-3">Jour de repos:</h3>
+                  <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
+{`Nicolas;Matin;07:45;11:00;REPOS;;...
+;Apres-Midi;00:00;00:00;;;...`}
+                  </pre>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Utilisez "REPOS" dans la colonne DEBUT (ligne Matin) pour marquer un jour de repos.
+                  </p>
                   <h3 className="text-sm font-medium text-gray-700 mb-2 mt-3">Avec couleurs:</h3>
                   <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
 {`EMPLOYES;;LUNDI;;;MARDI;;;...
