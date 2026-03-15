@@ -35,17 +35,34 @@ export const generateCSV = (
 
       if (schedule && schedule.isRestDay) {
         morningCells.push('REPOS', '');
-        afternoonCells.push('', '');
+        afternoonCells.push('REPOS', '');
         if (includeColors) {
           morningCells.push('');
           afternoonCells.push('');
         }
       } else if (schedule) {
-        morningCells.push(schedule.morningStart || '00:00', schedule.morningEnd || '00:00');
-        afternoonCells.push(schedule.afternoonStart || '00:00', schedule.afternoonEnd || '00:00');
+        const hasMorning = schedule.morningStart && schedule.morningEnd &&
+          (schedule.morningStart !== '00:00' || schedule.morningEnd !== '00:00') &&
+          schedule.morningStart !== schedule.morningEnd;
+        const hasAfternoon = schedule.afternoonStart && schedule.afternoonEnd &&
+          (schedule.afternoonStart !== '00:00' || schedule.afternoonEnd !== '00:00') &&
+          schedule.afternoonStart !== schedule.afternoonEnd;
+
+        if (hasMorning) {
+          morningCells.push(schedule.morningStart, schedule.morningEnd);
+        } else {
+          morningCells.push('REPOS', '');
+        }
+
+        if (hasAfternoon) {
+          afternoonCells.push(schedule.afternoonStart, schedule.afternoonEnd);
+        } else {
+          afternoonCells.push('REPOS', '');
+        }
+
         if (includeColors) {
-          morningCells.push(schedule.morningColor || '');
-          afternoonCells.push(schedule.afternoonColor || '');
+          morningCells.push(hasMorning ? (schedule.morningColor || '') : '');
+          afternoonCells.push(hasAfternoon ? (schedule.afternoonColor || '') : '');
         }
       } else {
         morningCells.push('00:00', '00:00');
