@@ -100,16 +100,34 @@ export const parseCSV = (
             ? cells[colorIndex].trim()
             : '';
 
-          // Detect rest day marker (only on morning row)
-          if (periodType === 'matin' && startTime.toUpperCase() === 'REPOS') {
-            const scheduleKey = `${currentEmployeeId}-${day}`;
-            result.schedules[scheduleKey] = {
-              morningStart: '',
-              morningEnd: '',
-              afternoonStart: '',
-              afternoonEnd: '',
-              isRestDay: true
-            };
+          const scheduleKey = `${currentEmployeeId}-${day}`;
+
+          // Detect rest day marker per period (morning or afternoon)
+          if (startTime.toUpperCase() === 'REPOS') {
+            if (!result.schedules[scheduleKey]) {
+              result.schedules[scheduleKey] = {
+                morningStart: '',
+                morningEnd: '',
+                afternoonStart: '',
+                afternoonEnd: '',
+                morningColor: 'bleu',
+                afternoonColor: 'vert'
+              };
+            }
+            // Leave this period empty (rest) - don't set times
+            // If both periods end up as REPOS, mark as full-day rest
+            const sched = result.schedules[scheduleKey];
+            const otherPeriodEmpty = period === 'morning'
+              ? (!sched.afternoonStart && !sched.afternoonEnd)
+              : (!sched.morningStart && !sched.morningEnd);
+            if (otherPeriodEmpty) {
+              // Check if the other period was already processed (we're on the second row)
+              // For morning row: afternoon not yet processed, so don't mark as full rest yet
+              // For afternoon row: morning was already processed
+              if (period === 'afternoon') {
+                sched.isRestDay = true;
+              }
+            }
             result.importedCount++;
             continue;
           }
@@ -117,8 +135,6 @@ export const parseCSV = (
           if (startTime && endTime &&
               (startTime !== '00:00' || endTime !== '00:00') &&
               startTime !== endTime) {
-
-            const scheduleKey = `${currentEmployeeId}-${day}`;
 
             if (!result.schedules[scheduleKey]) {
               result.schedules[scheduleKey] = {
@@ -131,10 +147,9 @@ export const parseCSV = (
               };
             }
 
-            // Skip if this day is already marked as rest day
-            if (result.schedules[scheduleKey].isRestDay) {
-              continue;
-            }
+            // If this day was tentatively not marked as rest, ensure isRestDay is false
+            // since at least one period has work hours
+            result.schedules[scheduleKey].isRestDay = false;
 
             result.schedules[scheduleKey][`${period}Start`] = startTime;
             result.schedules[scheduleKey][`${period}End`] = endTime;
