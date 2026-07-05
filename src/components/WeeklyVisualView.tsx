@@ -518,14 +518,14 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                   className="border border-gray-300 text-center py-2 text-blue-700"
                 >
                   {(() => {
-                    const t = calculateDayTotal(schedules, day);
+                    const t = calculateDayTotal(schedules, day, employees);
                     return t > 0 ? `${t.toFixed(1)}h` : '—';
                   })()}
                 </td>
               ))}
               <td className="border border-gray-300 text-center py-2 text-blue-700">
                 {(() => {
-                  const t = calculateGrandTotal(schedules);
+                  const t = calculateGrandTotal(schedules, employees);
                   return t > 0 ? `${t.toFixed(1)}h` : '—';
                 })()}
               </td>

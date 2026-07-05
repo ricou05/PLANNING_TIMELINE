@@ -7,6 +7,7 @@ interface CSVImportProps {
   onImport: (data: {
     employees: Employee[];
     schedules: Record<string, Schedule>;
+    replaceAll: boolean;
   }) => void;
   existingEmployees: Employee[];
   managedColors: ManagedColor[];
@@ -63,7 +64,8 @@ const CSVImport: React.FC<CSVImportProps> = ({ onImport, existingEmployees, mana
 
       onImport({
         employees: result.employees,
-        schedules: result.schedules
+        schedules: result.schedules,
+        replaceAll: importMode === 'replace'
       });
 
       setSuccess(`Importation réussie: ${result.importedCount} horaires importés pour ${result.employeeCount} employés`);

@@ -530,11 +530,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
               <td className="border-r-4 border-r-black"></td>
               {days.map((day) => (
                 <td key={day} className="border-r-4 border-r-black text-center font-bold text-blue-600">
-                  {calculateDayTotal(schedules, day).toFixed(2)}h
+                  {calculateDayTotal(schedules, day, employees).toFixed(2)}h
                 </td>
               ))}
               <td className="border-l-4 border-l-black text-center font-bold text-blue-600">
-                {calculateGrandTotal(schedules).toFixed(2)}h
+                {calculateGrandTotal(schedules, employees).toFixed(2)}h
               </td>
             </tr>
           </tbody>

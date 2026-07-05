@@ -234,12 +234,24 @@ function App() {
     });
   };
 
-  const handleCSVImport = (data: { employees: Employee[], schedules: Record<string, Schedule> }) => {
+  const handleCSVImport = (data: { employees: Employee[], schedules: Record<string, Schedule>, replaceAll: boolean }) => {
     setEmployees(data.employees);
-    setSchedules(prev => ({
-      ...prev,
-      ...data.schedules
-    }));
+    setEmployeeCount(data.employees.length);
+    if (data.replaceAll) {
+      // « Remplacer tout » : le planning importé remplace intégralement l'existant
+      setSchedules(data.schedules);
+      return;
+    }
+    setSchedules(prev => {
+      const merged = { ...prev, ...data.schedules };
+      // Purge les entrées orphelines (employés absents de la liste importée)
+      const validIds = new Set(data.employees.map(e => e.id));
+      Object.keys(merged).forEach(key => {
+        const id = parseInt(key.split('-')[0], 10);
+        if (!validIds.has(id)) delete merged[key];
+      });
+      return merged;
+    });
   };
 
   const handleToggleRestDay = useCallback((employeeId: number, day: string, isRest: boolean) => {
