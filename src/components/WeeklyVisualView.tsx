@@ -1,13 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, X, Copy, ClipboardPaste } from 'lucide-react';
-import { Employee, Schedule, ManagedColor } from '../types';
+import { Download, X, Copy, ClipboardPaste, AlertTriangle, CalendarOff } from 'lucide-react';
+import { Employee, Schedule, ManagedColor, ShiftTemplate } from '../types';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
+import { getEmployeeComplianceIssues } from '../utils/compliance';
 import ColorPicker from './ColorPicker';
+import ShiftToolsBar from './ShiftToolsBar';
 import TimeInput from './TimeInput';
 import { exportVisualToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
+
+const CELL_DRAG_TYPES = ['application/rest-day', 'application/shift-template', 'application/absence'];
+const isPlanningDrag = (e: React.DragEvent) =>
+  CELL_DRAG_TYPES.some(t => e.dataTransfer.types.includes(t));
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
   -45deg,
@@ -31,6 +37,10 @@ interface WeeklyVisualViewProps {
   copiedDay: string | null;
   onCopyDay: (day: string) => void;
   onPasteDay: (day: string) => void;
+  shiftTemplates: ShiftTemplate[];
+  onManageTemplatesClick: () => void;
+  onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
 }
 
 interface ShiftBlockProps {
@@ -117,6 +127,7 @@ interface EditableDayCellProps {
   day: string;
   onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
   isRestDayDragOver: boolean;
   onRestDayDragOver: (e: React.DragEvent) => void;
   onRestDayDragLeave: (e: React.DragEvent) => void;
@@ -131,6 +142,7 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   day,
   onSchedulePatch,
   onToggleRestDay,
+  onSetAbsence,
   isRestDayDragOver,
   onRestDayDragOver,
   onRestDayDragLeave,
@@ -167,6 +179,30 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
           onClick={() => onToggleRestDay(employeeId, day, false)}
           className="absolute top-0 right-0 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
           title="Retirer le jour de repos"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  if (schedule?.absence) {
+    return (
+      <div
+        className="flex items-center justify-center h-full min-h-[48px] relative"
+        style={{ background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
+        onDragOver={onRestDayDragOver}
+        onDragLeave={onRestDayDragLeave}
+        onDrop={onRestDayDrop}
+      >
+        <div className="flex items-center gap-1">
+          <CalendarOff className="w-4 h-4 text-amber-600" />
+          <span className="text-xs font-bold text-amber-700 uppercase">{schedule.absence}</span>
+        </div>
+        <button
+          onClick={() => onSetAbsence(employeeId, day, null)}
+          className="absolute top-0 right-0 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+          title="Retirer l'absence"
         >
           <X className="w-3 h-3" />
         </button>
@@ -276,6 +312,10 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   copiedDay,
   onCopyDay,
   onPasteDay,
+  shiftTemplates,
+  onManageTemplatesClick,
+  onApplyTemplate,
+  onSetAbsence,
 }) => {
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
@@ -294,8 +334,9 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
     }
   };
 
+  // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
   const handleRestDayDragOver = (e: React.DragEvent, cellKey: string) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
@@ -304,30 +345,45 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   };
 
   const handleRestDayDragLeave = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       setRestDayDragOverCell(null);
     }
   };
 
   const handleRestDayDrop = (e: React.DragEvent, employeeId: number, day: string) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setRestDayDragOverCell(null);
+    if (!isPlanningDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setRestDayDragOverCell(null);
+
+    const templateData = e.dataTransfer.getData('application/shift-template');
+    const absenceLabel = e.dataTransfer.getData('application/absence');
+    if (templateData) {
+      onApplyTemplate(employeeId, day, JSON.parse(templateData) as ShiftTemplate, selectedColor);
+    } else if (absenceLabel) {
+      onSetAbsence(employeeId, day, absenceLabel);
+    } else {
       onToggleRestDay(employeeId, day, true);
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="px-4 flex justify-between items-center">
-        <ColorPicker
-          selectedColor={selectedColor}
-          onColorChange={setSelectedColor}
-          managedColors={managedColors}
-          onManageClick={onManageColorsClick}
-          showRestDayButton={true}
-        />
+      <div className="px-4 flex justify-between items-start gap-4 flex-wrap">
+        <div className="flex flex-col gap-2">
+          <ColorPicker
+            selectedColor={selectedColor}
+            onColorChange={setSelectedColor}
+            managedColors={managedColors}
+            onManageClick={onManageColorsClick}
+            showRestDayButton={true}
+          />
+          <ShiftToolsBar
+            templates={shiftTemplates}
+            managedColors={managedColors}
+            onManageTemplatesClick={onManageTemplatesClick}
+          />
+        </div>
 
         <button
           onClick={() => setShowPDFModal(true)}
@@ -399,6 +455,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
           <tbody>
             {employees.map((employee, idx) => {
               const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
+              const complianceIssues = getEmployeeComplianceIssues(schedules, employee.id);
               const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
 
               return (
@@ -424,6 +481,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                           day={day}
                           onSchedulePatch={onSchedulePatch}
                           onToggleRestDay={onToggleRestDay}
+                          onSetAbsence={onSetAbsence}
                           isRestDayDragOver={restDayDragOverCell === cellKey}
                           onRestDayDragOver={(e) => handleRestDayDragOver(e, cellKey)}
                           onRestDayDragLeave={handleRestDayDragLeave}
@@ -433,7 +491,17 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                     );
                   })}
                   <td className="border border-gray-300 text-center font-bold text-blue-700 align-middle">
-                    {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—'}
+                    <div className="flex items-center justify-center gap-1">
+                      {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—'}
+                      {complianceIssues.length > 0 && (
+                        <span
+                          title={complianceIssues.map(i => i.message).join('\n')}
+                          className="cursor-help"
+                        >
+                          <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

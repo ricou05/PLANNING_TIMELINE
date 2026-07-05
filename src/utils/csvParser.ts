@@ -132,6 +132,22 @@ export const parseCSV = (
             continue;
           }
 
+          // Libellé d'absence (CONGÉS, MALADIE...) : du texte à la place d'un horaire
+          if (startTime && !/^\d{1,2}:\d{2}$/.test(startTime)) {
+            if (!result.schedules[scheduleKey]) {
+              result.schedules[scheduleKey] = {
+                morningStart: '',
+                morningEnd: '',
+                afternoonStart: '',
+                afternoonEnd: '',
+              };
+            }
+            const label = startTime.charAt(0).toUpperCase() + startTime.slice(1).toLowerCase();
+            result.schedules[scheduleKey].absence = label;
+            result.importedCount++;
+            continue;
+          }
+
           if (startTime && endTime &&
               (startTime !== '00:00' || endTime !== '00:00') &&
               startTime !== endTime) {

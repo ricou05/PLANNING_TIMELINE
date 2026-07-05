@@ -1,13 +1,18 @@
 import React, { useState, useRef } from 'react';
-import { Employee, Schedule, ManagedColor } from '../types';
+import { Employee, Schedule, ManagedColor, ShiftTemplate } from '../types';
 import ColorPicker from './ColorPicker';
+import ShiftToolsBar from './ShiftToolsBar';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
-import { X, FileDown } from 'lucide-react';
+import { X, FileDown, CalendarOff, Users } from 'lucide-react';
+
+const CELL_DRAG_TYPES = ['application/rest-day', 'application/shift-template', 'application/absence'];
+const isPlanningDrag = (e: React.DragEvent) =>
+  CELL_DRAG_TYPES.some(t => e.dataTransfer.types.includes(t));
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
   -45deg,
@@ -31,6 +36,10 @@ interface TimelineViewProps {
   weekNumber: number;
   year: number;
   dates: string[];
+  shiftTemplates: ShiftTemplate[];
+  onManageTemplatesClick: () => void;
+  onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
 }
 
 const HOUR_WIDTH = 80;
@@ -53,7 +62,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onToggleRestDay,
   weekNumber,
   year,
-  dates
+  dates,
+  shiftTemplates,
+  onManageTemplatesClick,
+  onApplyTemplate,
+  onSetAbsence
 }) => {
   const DAYS_LIST = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const dayIndex = DAYS_LIST.indexOf(day);
@@ -77,8 +90,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [restDayDragOverEmployee, setRestDayDragOverEmployee] = useState<number | null>(null);
 
+  // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
   const handleRestDayDragOver = (e: React.DragEvent, employeeId: number) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
@@ -87,16 +101,24 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   };
 
   const handleRestDayDragLeave = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       setRestDayDragOverEmployee(null);
     }
   };
 
   const handleRestDayDrop = (e: React.DragEvent, employeeId: number) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setRestDayDragOverEmployee(null);
+    if (!isPlanningDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setRestDayDragOverEmployee(null);
+
+    const templateData = e.dataTransfer.getData('application/shift-template');
+    const absenceLabel = e.dataTransfer.getData('application/absence');
+    if (templateData) {
+      onApplyTemplate(employeeId, day, JSON.parse(templateData) as ShiftTemplate, selectedColor);
+    } else if (absenceLabel) {
+      onSetAbsence(employeeId, day, absenceLabel);
+    } else {
       onToggleRestDay(employeeId, day, true);
     }
   };
@@ -107,6 +129,41 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const totalDailyHours = employees.reduce((sum, emp) => {
     return sum + calculateDailyHours(schedules[`${emp.id}-${day}`]);
   }, 0);
+
+  // Couverture : nombre de présents par créneau de 15 min, avec détail par rayon (couleur)
+  const dayStartMin = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME);
+  const dayEndMin = timeToMinutes(TIME_CONSTRAINTS.MAX_TIME);
+  const slotCount = (dayEndMin - dayStartMin) / 15;
+  const coverage = Array.from({ length: slotCount }, (_, i) => {
+    const slotStart = dayStartMin + i * 15;
+    let count = 0;
+    const byLabel: Record<string, number> = {};
+    employees.forEach(emp => {
+      const s = schedules[`${emp.id}-${day}`];
+      if (!s || s.isRestDay || s.absence) return;
+      const periods: Array<[string, string, string | undefined]> = [
+        [s.morningStart, s.morningEnd, s.morningColor],
+        [s.afternoonStart, s.afternoonEnd, s.afternoonColor],
+      ];
+      for (const [pStart, pEnd, pColor] of periods) {
+        if (pStart && pEnd && timeToMinutes(pStart) <= slotStart && slotStart < timeToMinutes(pEnd)) {
+          count++;
+          const mc = findManagedColor(managedColors, pColor);
+          const label = mc ? mc.label : 'Sans rayon';
+          byLabel[label] = (byLabel[label] || 0) + 1;
+          break;
+        }
+      }
+    });
+    return { slotStart, count, byLabel };
+  });
+  const maxCoverage = Math.max(1, ...coverage.map(c => c.count));
+
+  const coverageTooltip = (slot: { slotStart: number; count: number; byLabel: Record<string, number> }): string => {
+    const header = `${minutesToTime(slot.slotStart)} — ${slot.count} présent${slot.count > 1 ? 's' : ''}`;
+    const details = Object.entries(slot.byLabel).map(([label, n]) => `${label} : ${n}`);
+    return [header, ...details].join('\n');
+  };
 
   const getColorStyle = (colorId?: string): { bg: string; border: string; text: string } => {
     const mc = findManagedColor(managedColors, colorId);
@@ -329,14 +386,21 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="px-4 flex items-center justify-between">
-        <ColorPicker
-          selectedColor={selectedColor}
-          onColorChange={setSelectedColor}
-          managedColors={managedColors}
-          onManageClick={onManageColorsClick}
-          showRestDayButton
-        />
+      <div className="px-4 flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col gap-2">
+          <ColorPicker
+            selectedColor={selectedColor}
+            onColorChange={setSelectedColor}
+            managedColors={managedColors}
+            onManageClick={onManageColorsClick}
+            showRestDayButton
+          />
+          <ShiftToolsBar
+            templates={shiftTemplates}
+            managedColors={managedColors}
+            onManageTemplatesClick={onManageTemplatesClick}
+          />
+        </div>
         <button
           onClick={handleExportPDF}
           disabled={isExporting}
@@ -390,6 +454,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             {employees.map((employee, index) => {
               const schedule = schedules[`${employee.id}-${day}`] || {};
               const isRestDay = schedule.isRestDay === true;
+              const absence = schedule.absence;
               const dailyHours = calculateDailyHours(schedule);
               const weeklyHours = calculateWeeklyHours(schedules, employee.id);
               const morningStyle = getColorStyle(schedule.morningColor);
@@ -427,6 +492,28 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         onClick={() => onToggleRestDay(employee.id, day, false)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                         title="Retirer le jour de repos"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : absence ? (
+                    <div
+                      className={`relative flex-grow h-9 flex items-center ${
+                        isRestDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
+                      }`}
+                      style={{ width: timelineWidth, background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
+                      onDragOver={(e) => handleRestDayDragOver(e, employee.id)}
+                      onDragLeave={handleRestDayDragLeave}
+                      onDrop={(e) => handleRestDayDrop(e, employee.id)}
+                    >
+                      <div className="flex items-center gap-2 px-4">
+                        <CalendarOff className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-bold text-amber-700 uppercase">{absence}</span>
+                      </div>
+                      <button
+                        onClick={() => onSetAbsence(employee.id, day, null)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Retirer l'absence"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -543,6 +630,48 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* Ligne de couverture : nombre de présents par créneau de 15 min */}
+          <div className="flex border-t-2 border-gray-400 bg-gray-50" style={{ height: 30 }}>
+            <div
+              style={{ width: COLUMN_WIDTH.employee }}
+              className="flex-shrink-0 border-r border-gray-200 flex items-center gap-1.5 px-2"
+            >
+              <Users className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-bold text-gray-600">Présents</span>
+            </div>
+            <div className="flex" style={{ width: timelineWidth }}>
+              {coverage.map((slot) => {
+                const intensity = slot.count === 0 ? 0 : 0.15 + 0.55 * (slot.count / maxCoverage);
+                return (
+                  <div
+                    key={slot.slotStart}
+                    className="flex items-center justify-center border-r border-gray-100 cursor-help"
+                    style={{
+                      width: HOUR_WIDTH / 4,
+                      backgroundColor: slot.count > 0 ? `rgba(37, 99, 235, ${intensity})` : undefined,
+                    }}
+                    title={coverageTooltip(slot)}
+                  >
+                    {slot.count > 0 && (
+                      <span
+                        className="text-[10px] font-bold"
+                        style={{ color: slot.count / maxCoverage > 0.6 ? '#ffffff' : '#1e3a8a' }}
+                      >
+                        {slot.count}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div
+              style={{ width: COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal }}
+              className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center"
+            >
+              <span className="text-[10px] text-gray-400">max {maxCoverage}</span>
+            </div>
           </div>
         </div>
       </div>

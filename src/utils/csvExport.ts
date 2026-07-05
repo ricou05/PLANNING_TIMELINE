@@ -38,6 +38,15 @@ export const generateCSV = (
           morningCells.push('');
           afternoonCells.push('');
         }
+      } else if (schedule && schedule.absence) {
+        // Absence pleine journée : le libellé remplace les horaires
+        const label = schedule.absence.toUpperCase();
+        morningCells.push(label, '');
+        afternoonCells.push(label, '');
+        if (includeColors) {
+          morningCells.push('');
+          afternoonCells.push('');
+        }
       } else if (schedule) {
         const hasMorning = schedule.morningStart && schedule.morningEnd &&
           (schedule.morningStart !== '00:00' || schedule.morningEnd !== '00:00') &&

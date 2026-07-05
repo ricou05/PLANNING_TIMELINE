@@ -13,6 +13,19 @@ export interface Schedule {
   morningColor?: string;
   afternoonColor?: string;
   isRestDay?: boolean;
+  /** Libellé d'absence (Congés, Maladie, École...) — journée non travaillée */
+  absence?: string;
+}
+
+export interface ShiftTemplate {
+  id: string;
+  label: string;
+  morningStart: string;
+  morningEnd: string;
+  afternoonStart: string;
+  afternoonEnd: string;
+  /** Couleur (id de couleur gérée) appliquée aux créneaux ; sinon la couleur sélectionnée */
+  color?: string;
 }
 
 export interface ColorLabel {

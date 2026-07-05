@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, LayoutGrid, Undo2, Redo2 } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
@@ -7,15 +7,20 @@ import ExcelView from './components/ExcelView';
 import FileMenu from './components/FileMenu/FileMenu';
 import CSVImport from './components/CSVImport';
 import ColorManagementModal from './components/ColorManagementModal';
-import { Employee, Schedule, SavedSchedule } from './types';
-import { getCurrentWeekNumber, getCurrentWeekYear, getWeekDates, formatDate } from './utils/dateUtils';
+import ShiftTemplateModal from './components/ShiftTemplateModal';
+import { Employee, Schedule, SavedSchedule, ShiftTemplate } from './types';
+import { getCurrentWeekNumber, getCurrentWeekYear, getWeekDates, getWeeksInYear, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
+import { useShiftTemplates } from './hooks/useShiftTemplates';
 import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+const weekKeyOf = (year: number, weekNumber: number): string =>
+  `${year}-S${String(weekNumber).padStart(2, '0')}`;
 
 const autoSaved = loadScheduleAutoSave();
 
@@ -64,10 +69,12 @@ const CSVExportButton: React.FC<{ onExport: (withColors: boolean) => void }> = (
 };
 
 function App() {
-  const { schedules, setSchedules, setSchedulesWithoutHistory, undo, redo, canUndo, canRedo } = useUndoRedo(autoSaved?.schedules || {});
+  const { schedules, setSchedules, resetSchedules, undo, redo, canUndo, canRedo } = useUndoRedo(autoSaved?.schedules || {});
   const [activeTab, setActiveTab] = useState<'weekly' | 'excel' | string>('weekly');
   const [weekNumber, setWeekNumber] = useState(autoSaved?.weekNumber || getCurrentWeekNumber());
   const [year, setYear] = useState(autoSaved?.year || getCurrentWeekYear());
+  // Plannings des autres semaines (la semaine affichée vit dans `schedules`)
+  const weeksRef = useRef<Record<string, Record<string, Schedule>>>(autoSaved?.weeks || {});
   const [employeeCount, setEmployeeCount] = useState(autoSaved?.employees?.length || 10);
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (autoSaved?.employees?.length) return autoSaved.employees;
@@ -81,8 +88,51 @@ function App() {
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const [copiedDay, setCopiedDay] = useState<string | null>(null);
   const [copiedDaySchedules, setCopiedDaySchedules] = useState<Record<string, Schedule> | null>(null);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const { templates, saveTemplates } = useShiftTemplates();
   const weekDates = getWeekDates(weekNumber, year);
-  const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year);
+  const weekKey = weekKeyOf(year, weekNumber);
+
+  // Toutes les semaines, y compris celle en cours d'édition (pour l'auto-sauvegarde)
+  const allWeeks = useMemo(
+    () => ({ ...weeksRef.current, [weekKey]: schedules }),
+    [weekKey, schedules]
+  );
+  const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year, allWeeks);
+
+  // Change de semaine affichée : mémorise la semaine courante puis charge la nouvelle
+  const switchToWeek = useCallback((newWeek: number, newYear: number) => {
+    weeksRef.current = { ...weeksRef.current, [weekKeyOf(year, weekNumber)]: schedules };
+    resetSchedules(weeksRef.current[weekKeyOf(newYear, newWeek)] || {});
+    setWeekNumber(newWeek);
+    setYear(newYear);
+  }, [schedules, weekNumber, year, resetSchedules]);
+
+  const goToPreviousWeek = () => {
+    if (weekNumber > 1) switchToWeek(weekNumber - 1, year);
+    else switchToWeek(getWeeksInYear(year - 1), year - 1);
+  };
+
+  const goToNextWeek = () => {
+    if (weekNumber < getWeeksInYear(year)) switchToWeek(weekNumber + 1, year);
+    else switchToWeek(1, year + 1);
+  };
+
+  // Copie le planning de la semaine précédente dans la semaine affichée (annulable)
+  const duplicatePreviousWeek = () => {
+    const prevKey = weekNumber > 1
+      ? weekKeyOf(year, weekNumber - 1)
+      : weekKeyOf(year - 1, getWeeksInYear(year - 1));
+    const prevSchedules = weeksRef.current[prevKey];
+    if (!prevSchedules || Object.keys(prevSchedules).length === 0) {
+      alert(`Aucune donnée trouvée pour la semaine précédente (${prevKey}).`);
+      return;
+    }
+    if (Object.keys(schedules).length === 0 ||
+        window.confirm('Remplacer le planning de cette semaine par celui de la semaine précédente ?')) {
+      setSchedules({ ...prevSchedules });
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -102,14 +152,14 @@ function App() {
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (value >= 1970 && value <= 2100) {
-      setYear(value);
+      switchToWeek(Math.min(weekNumber, getWeeksInYear(value)), value);
     }
   };
 
   const handleWeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
-    if (value >= 1 && value <= 53) {
-      setWeekNumber(value);
+    if (value >= 1 && value <= getWeeksInYear(year)) {
+      switchToWeek(value, year);
     }
   };
 
@@ -225,6 +275,41 @@ function App() {
     });
   }, [setSchedules]);
 
+  // Applique un modèle de créneaux sur une journée (fallbackColor = couleur sélectionnée dans la vue)
+  const handleApplyTemplate = useCallback((employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => {
+    const color = template.color || fallbackColor;
+    const hasMorning = template.morningStart && template.morningEnd;
+    const hasAfternoon = template.afternoonStart && template.afternoonEnd;
+    handleSchedulePatch(employeeId, day, {
+      morningStart: template.morningStart,
+      morningEnd: template.morningEnd,
+      afternoonStart: template.afternoonStart,
+      afternoonEnd: template.afternoonEnd,
+      morningColor: hasMorning ? color : undefined,
+      afternoonColor: hasAfternoon ? color : undefined,
+      isRestDay: false,
+      absence: undefined,
+    });
+  }, [handleSchedulePatch]);
+
+  // Marque (ou retire si label null) une absence sur une journée
+  const handleSetAbsence = useCallback((employeeId: number, day: string, label: string | null) => {
+    if (label) {
+      handleSchedulePatch(employeeId, day, {
+        morningStart: '',
+        morningEnd: '',
+        afternoonStart: '',
+        afternoonEnd: '',
+        morningColor: undefined,
+        afternoonColor: undefined,
+        isRestDay: false,
+        absence: label,
+      });
+    } else {
+      handleSchedulePatch(employeeId, day, { absence: undefined });
+    }
+  }, [handleSchedulePatch]);
+
   const handleCopyDay = useCallback((day: string) => {
     const daySchedules: Record<string, Schedule> = {};
     employees.forEach(emp => {
@@ -256,8 +341,9 @@ function App() {
   }, [copiedDay, copiedDaySchedules, employees, setSchedules]);
 
   const handleNewSchedule = () => {
-    if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees seront perdues.")) {
-      setSchedules({});
+    if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees (toutes semaines confondues) seront perdues.")) {
+      weeksRef.current = {};
+      resetSchedules({});
       setEmployees(Array.from({ length: employeeCount }, (_, index) => ({
         id: index + 1,
         name: `Employe ${index + 1}`,
@@ -286,6 +372,10 @@ function App() {
           copiedDay={copiedDay}
           onCopyDay={handleCopyDay}
           onPasteDay={handlePasteDay}
+          shiftTemplates={templates}
+          onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
+          onApplyTemplate={handleApplyTemplate}
+          onSetAbsence={handleSetAbsence}
         />
       );
     } else if (activeTab === 'weekly') {
@@ -307,6 +397,10 @@ function App() {
           onCopyDay={handleCopyDay}
           onPasteDay={handlePasteDay}
           onToggleRestDay={handleToggleRestDay}
+          shiftTemplates={templates}
+          onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
+          onApplyTemplate={handleApplyTemplate}
+          onSetAbsence={handleSetAbsence}
         />
       );
     } else if (activeTab === 'excel') {
@@ -338,6 +432,10 @@ function App() {
           weekNumber={weekNumber}
           year={year}
           dates={weekDates.map(formatDate)}
+          shiftTemplates={templates}
+          onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
+          onApplyTemplate={handleApplyTemplate}
+          onSetAbsence={handleSetAbsence}
         />
       );
     }
@@ -347,7 +445,9 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <FileMenu
         onRestore={(savedSchedule: SavedSchedule) => {
-          setSchedulesWithoutHistory(savedSchedule.schedules);
+          // Mémorise la semaine affichée puis charge la sauvegarde sur sa semaine
+          weeksRef.current = { ...weeksRef.current, [weekKey]: schedules };
+          resetSchedules(savedSchedule.schedules);
           setEmployees(savedSchedule.employees);
           setWeekNumber(savedSchedule.weekNumber);
           setYear(savedSchedule.year);
@@ -385,6 +485,13 @@ function App() {
               <label htmlFor="weekNumber" className="text-sm font-medium text-gray-700">
                 Semaine N
               </label>
+              <button
+                onClick={goToPreviousWeek}
+                title="Semaine précédente"
+                className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
               <input
                 id="weekNumber"
                 type="number"
@@ -394,6 +501,21 @@ function App() {
                 onChange={handleWeekChange}
                 className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
               />
+              <button
+                onClick={goToNextWeek}
+                title="Semaine suivante"
+                className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={duplicatePreviousWeek}
+                title="Reprendre le planning de la semaine précédente"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+              >
+                <CopyPlus className="w-3.5 h-3.5" />
+                Reprendre S-1
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <label htmlFor="employeeCount" className="text-sm font-medium text-gray-700">
@@ -522,6 +644,14 @@ function App() {
         onSave={saveColors}
         onAutoSave={autoSaveColors}
         lastAutoSave={lastAutoSave}
+      />
+
+      <ShiftTemplateModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        templates={templates}
+        managedColors={managedColors}
+        onSave={saveTemplates}
       />
     </div>
   );

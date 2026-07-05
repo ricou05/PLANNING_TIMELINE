@@ -102,6 +102,15 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
       restLabel.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
       restBar.appendChild(restLabel);
       timelineCell.appendChild(restBar);
+    } else if (schedule.absence) {
+      // Absence pleine journée : barre ambre hachurée
+      const absBar = document.createElement('div');
+      absBar.style.cssText = `position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;background:${REST_DAY_BG}, #fef3c7;`;
+      const absLabel = document.createElement('span');
+      absLabel.style.cssText = 'font-size:9px;font-weight:700;color:#b45309;text-transform:uppercase;';
+      absLabel.textContent = schedule.absence;
+      absBar.appendChild(absLabel);
+      timelineCell.appendChild(absBar);
     } else {
       for (let m = startMin; m <= endMin; m += 60) {
         const offset = ((m - startMin) / totalMinutes) * timelineW;

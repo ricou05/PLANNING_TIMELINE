@@ -45,6 +45,11 @@ export function useUndoRedo(initial: Schedules) {
     []
   );
 
+  // Remplace le planning ET vide l'historique (changement de semaine, restauration...)
+  const resetSchedules = useCallback((next: Schedules) => {
+    setHistory({ past: [], present: next, future: [] });
+  }, []);
+
   const undo = useCallback(() => {
     setHistory(h => {
       if (h.past.length === 0) return h;
@@ -73,6 +78,7 @@ export function useUndoRedo(initial: Schedules) {
     schedules: history.present,
     setSchedules,
     setSchedulesWithoutHistory,
+    resetSchedules,
     undo,
     redo,
     canUndo: history.past.length > 0,

@@ -43,6 +43,16 @@ export function getCurrentWeekYear(): number {
   return getCurrentWeekThursday().getFullYear();
 }
 
+// Nombre de semaines ISO dans l'année (52 ou 53) : le 28 décembre est toujours
+// dans la dernière semaine de l'année ISO
+export function getWeeksInYear(year: number): number {
+  const dec28 = new Date(year, 11, 28);
+  const thursday = new Date(dec28);
+  thursday.setDate(dec28.getDate() + 4 - (dec28.getDay() || 7));
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
 type SupportedTimestamp = Date | { toDate?: () => Date } | { seconds: number; nanoseconds?: number } | null | undefined;
 
 const FR_DATETIME_FORMAT: Intl.DateTimeFormatOptions = {
