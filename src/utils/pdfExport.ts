@@ -1,5 +1,3 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateWeeklyHours, calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
@@ -164,10 +162,14 @@ const createPDFTable = ({
     const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
     const bgColor = empIndex % 2 === 0 ? '' : 'background:#f9fafb;';
 
-    // Check rest days for this employee
+    // Repos et absences pleine journée pour cet employé
     const restDayFlags = days.map(day => {
       const schedule = schedules[`${employee.id}-${day}`] || {};
       return schedule.isRestDay === true;
+    });
+    const absenceLabels = days.map(day => {
+      const schedule = schedules[`${employee.id}-${day}`] || {};
+      return schedule.absence;
     });
 
     const morningRow = document.createElement('tr');
@@ -192,6 +194,13 @@ const createPDFTable = ({
         td.rowSpan = 2;
         td.style.cssText = cellBase + `background:#e5e7eb;background-image:${REST_DAY_BG};font-weight:700;color:#6b7280;font-size:${Math.max(7, fontSize - 1)}px;`;
         td.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
+        morningRow.appendChild(td);
+      } else if (absenceLabels[dayIdx]) {
+        // Absence pleine journée : rowSpan=2, fond ambre hachuré
+        const td = document.createElement('td');
+        td.rowSpan = 2;
+        td.style.cssText = cellBase + `background:#fef3c7;background-image:${REST_DAY_BG};font-weight:700;color:#b45309;font-size:${Math.max(7, fontSize - 1)}px;text-transform:uppercase;`;
+        td.textContent = absenceLabels[dayIdx] as string;
         morningRow.appendChild(td);
       } else {
         const td = document.createElement('td');
@@ -226,7 +235,7 @@ const createPDFTable = ({
     afternoonRow.appendChild(aLabel);
 
     days.forEach((day, dayIdx) => {
-      if (restDayFlags[dayIdx]) return; // already rendered as rowSpan=2
+      if (restDayFlags[dayIdx] || absenceLabels[dayIdx]) return; // already rendered as rowSpan=2
       const schedule = schedules[`${employee.id}-${day}`] || {};
       const td = document.createElement('td');
       td.style.cssText = cellBase + bgColor;
@@ -410,6 +419,7 @@ const createVisualPDFTable = ({
       td.style.cssText = `${cellBase}background:${rowBg};padding:3px 4px;`;
 
       const isRestDay = schedule?.isRestDay === true;
+      const absence = schedule?.absence;
       const hasMorning = schedule?.morningStart && schedule?.morningEnd;
       const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
 
@@ -419,6 +429,13 @@ const createVisualPDFTable = ({
         td.style.color = '#6b7280';
         td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
         td.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
+      } else if (absence) {
+        td.style.background = `${REST_DAY_BG}, #fef3c7`;
+        td.style.fontWeight = '700';
+        td.style.color = '#b45309';
+        td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
+        td.style.textTransform = 'uppercase';
+        td.textContent = absence;
       } else if (!hasMorning && !hasAfternoon) {
         td.style.color = '#d1d5db';
         td.textContent = '—';
@@ -494,6 +511,11 @@ const renderToPDF = async (
   container: HTMLElement,
   filename: string,
 ): Promise<void> => {
+  // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
   container.style.position = 'absolute';
   container.style.left = '-9999px';
   container.style.top = '0';

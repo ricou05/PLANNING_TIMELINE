@@ -10,6 +10,8 @@ export interface ScheduleAutoSaveData {
   weekNumber: number;
   year: number;
   timestamp: string;
+  /** Plannings de toutes les semaines ouvertes, indexés par clé "AAAA-Sxx" */
+  weeks?: Record<string, Record<string, Schedule>>;
 }
 
 export const loadScheduleAutoSave = (): ScheduleAutoSaveData | null => {
@@ -34,7 +36,8 @@ export const useScheduleAutoSave = (
   schedules: Record<string, Schedule>,
   employees: Employee[],
   weekNumber: number,
-  year: number
+  year: number,
+  weeks?: Record<string, Record<string, Schedule>>
 ) => {
   const [lastAutoSave, setLastAutoSave] = useState<string | null>(() => {
     const saved = loadScheduleAutoSave();
@@ -61,6 +64,7 @@ export const useScheduleAutoSave = (
         weekNumber,
         year,
         timestamp: now,
+        weeks,
       };
       localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
       setLastAutoSave(now);
@@ -73,7 +77,7 @@ export const useScheduleAutoSave = (
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [schedules, employees, weekNumber, year]);
+  }, [schedules, employees, weekNumber, year, weeks]);
 
   useEffect(() => {
     return () => {

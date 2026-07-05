@@ -5,8 +5,6 @@ const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dima
 export const generateCSV = (
   employees: Employee[],
   schedules: Record<string, Schedule>,
-  weekNumber: number,
-  year: number,
   includeColors: boolean = false
 ): string => {
   const lines: string[] = [];
@@ -36,6 +34,15 @@ export const generateCSV = (
       if (schedule && schedule.isRestDay) {
         morningCells.push('REPOS', '');
         afternoonCells.push('REPOS', '');
+        if (includeColors) {
+          morningCells.push('');
+          afternoonCells.push('');
+        }
+      } else if (schedule && schedule.absence) {
+        // Absence pleine journée : le libellé remplace les horaires
+        const label = schedule.absence.toUpperCase();
+        morningCells.push(label, '');
+        afternoonCells.push(label, '');
         if (includeColors) {
           morningCells.push('');
           afternoonCells.push('');
@@ -88,7 +95,7 @@ export const downloadCSV = (
   year: number,
   includeColors: boolean = false
 ): void => {
-  const csv = generateCSV(employees, schedules, weekNumber, year, includeColors);
+  const csv = generateCSV(employees, schedules, includeColors);
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

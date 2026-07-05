@@ -1,7 +1,5 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Employee, Schedule, ManagedColor } from '../types';
-import { calculateDailyHours, calculateWeeklyHours } from './scheduleCalculations';
+import { calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
 import { timeToMinutes, minutesToTime, TIME_CONSTRAINTS } from './timeUtils';
 
@@ -104,6 +102,15 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
       restLabel.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
       restBar.appendChild(restLabel);
       timelineCell.appendChild(restBar);
+    } else if (schedule.absence) {
+      // Absence pleine journée : barre ambre hachurée
+      const absBar = document.createElement('div');
+      absBar.style.cssText = `position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;background:${REST_DAY_BG}, #fef3c7;`;
+      const absLabel = document.createElement('span');
+      absLabel.style.cssText = 'font-size:9px;font-weight:700;color:#b45309;text-transform:uppercase;';
+      absLabel.textContent = schedule.absence;
+      absBar.appendChild(absLabel);
+      timelineCell.appendChild(absBar);
     } else {
       for (let m = startMin; m <= endMin; m += 60) {
         const offset = ((m - startMin) / totalMinutes) * timelineW;
@@ -112,9 +119,13 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
         timelineCell.appendChild(gridLine);
       }
 
-      const renderBar = (startKey: string, endKey: string, colorKey: string) => {
-        const s = schedule[startKey as keyof Schedule];
-        const e = schedule[endKey as keyof Schedule];
+      const renderBar = (
+        startKey: 'morningStart' | 'afternoonStart',
+        endKey: 'morningEnd' | 'afternoonEnd',
+        colorKey: 'morningColor' | 'afternoonColor'
+      ) => {
+        const s = schedule[startKey];
+        const e = schedule[endKey];
         if (!s || !e) return;
 
         const sMin = timeToMinutes(s);
@@ -122,7 +133,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
         const left = ((sMin - startMin) / totalMinutes) * timelineW;
         const width = ((eMin - sMin) / totalMinutes) * timelineW;
 
-        const mc = findManagedColor(managedColors, schedule[colorKey as keyof Schedule]);
+        const mc = findManagedColor(managedColors, schedule[colorKey]);
         const hex = mc ? mc.hex : '#DBEAFE';
         const textColor = mc ? getTextColorForHex(mc.hex) : '#1E3A8A';
 
@@ -204,6 +215,11 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
 };
 
 export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Promise<void> => {
+  // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
   const container = buildTimelineHTML(params);
   container.style.position = 'absolute';
   container.style.left = '-9999px';

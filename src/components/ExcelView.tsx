@@ -1,7 +1,6 @@
 import React from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { Employee, Schedule } from '../types';
-import * as XLSX from 'xlsx';
 import EmployeeNameEditor from './EmployeeNameEditor';
 
 interface ExcelViewProps {
@@ -25,7 +24,10 @@ const ExcelView: React.FC<ExcelViewProps> = ({
   onEmployeeNameChange,
   onEmployeeDelete
 }) => {
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    // xlsx est chargé à la demande pour alléger le chargement initial de l'application
+    const XLSX = await import('xlsx');
+
     // Créer un nouveau workbook
     const wb = XLSX.utils.book_new();
     

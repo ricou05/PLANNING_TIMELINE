@@ -1,14 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Copy, ClipboardPaste, X } from 'lucide-react';
+import { Download, Copy, ClipboardPaste, X, AlertTriangle, CalendarOff } from 'lucide-react';
 import TimeInput from './TimeInput';
-import { Employee, Schedule, ManagedColor } from '../types';
+import { Employee, Schedule, ManagedColor, ShiftTemplate } from '../types';
 import ColorPicker from './ColorPicker';
+import ShiftToolsBar from './ShiftToolsBar';
 import DraggableEmployeeList from './DraggableEmployeeList';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
+import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
+
+const CELL_DRAG_TYPES = ['application/rest-day', 'application/shift-template', 'application/absence'];
+const isPlanningDrag = (e: React.DragEvent) =>
+  CELL_DRAG_TYPES.some(t => e.dataTransfer.types.includes(t));
 
 interface WeeklyScheduleProps {
   employees: Employee[];
@@ -17,7 +23,7 @@ interface WeeklyScheduleProps {
   schedules: Record<string, Schedule>;
   weekNumber: number;
   year: number;
-  onScheduleChange: (employeeId: number, day: string, period: keyof Schedule, value: string) => void;
+  onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onEmployeeNameChange: (id: number, newName: string) => void;
   onEmployeeReorder: (reorderedEmployees: Employee[]) => void;
   onEmployeeDelete: (id: number) => void;
@@ -27,6 +33,10 @@ interface WeeklyScheduleProps {
   onCopyDay: (day: string) => void;
   onPasteDay: (day: string) => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
+  shiftTemplates: ShiftTemplate[];
+  onManageTemplatesClick: () => void;
+  onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
 }
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
@@ -50,7 +60,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   schedules,
   weekNumber,
   year,
-  onScheduleChange,
+  onSchedulePatch,
   onEmployeeNameChange,
   onEmployeeReorder,
   onEmployeeDelete,
@@ -60,6 +70,10 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onCopyDay,
   onPasteDay,
   onToggleRestDay,
+  shiftTemplates,
+  onManageTemplatesClick,
+  onApplyTemplate,
+  onSetAbsence,
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
@@ -117,8 +131,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     setDraggedEmployeeIndex(null);
   };
 
+  // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
   const handleRestDayDragOver = (e: React.DragEvent, cellKey: string) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
@@ -127,16 +142,24 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   };
 
   const handleRestDayDragLeave = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
+    if (isPlanningDrag(e)) {
       setRestDayDragOverCell(null);
     }
   };
 
   const handleRestDayDrop = (e: React.DragEvent, employeeId: number, day: string) => {
-    if (e.dataTransfer.types.includes('application/rest-day')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setRestDayDragOverCell(null);
+    if (!isPlanningDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setRestDayDragOverCell(null);
+
+    const templateData = e.dataTransfer.getData('application/shift-template');
+    const absenceLabel = e.dataTransfer.getData('application/absence');
+    if (templateData) {
+      onApplyTemplate(employeeId, day, JSON.parse(templateData) as ShiftTemplate, selectedColor);
+    } else if (absenceLabel) {
+      onSetAbsence(employeeId, day, absenceLabel);
+    } else {
       onToggleRestDay(employeeId, day, true);
     }
   };
@@ -158,9 +181,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
 
   const handleDeletePeriod = (e: React.MouseEvent, employeeId: number, day: string, period: 'morning' | 'afternoon') => {
     e.stopPropagation();
-    onScheduleChange(employeeId, day, `${period}Start`, '');
-    onScheduleChange(employeeId, day, `${period}End`, '');
-    onScheduleChange(employeeId, day, `${period}Color`, '');
+    onSchedulePatch(employeeId, day, {
+      [`${period}Start`]: '',
+      [`${period}End`]: '',
+      [`${period}Color`]: '',
+    });
     setEditingCell(null);
   };
 
@@ -188,10 +213,10 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <TimeInput
             value={start}
             onChange={(value) => {
-              onScheduleChange(employee.id, day, startKey, value);
-              if (value && !schedule[`${period}Color`]) {
-                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
-              }
+              onSchedulePatch(employee.id, day, {
+                [startKey]: value,
+                ...(value && !schedule[`${period}Color`] ? { [`${period}Color`]: selectedColor } : {}),
+              });
             }}
             placeholder=":"
             minTime="06:30"
@@ -201,10 +226,10 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <TimeInput
             value={end}
             onChange={(value) => {
-              onScheduleChange(employee.id, day, endKey, value);
-              if (value && !schedule[`${period}Color`]) {
-                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
-              }
+              onSchedulePatch(employee.id, day, {
+                [endKey]: value,
+                ...(value && !schedule[`${period}Color`] ? { [`${period}Color`]: selectedColor } : {}),
+              });
             }}
             placeholder=":"
             minTime="06:30"
@@ -256,9 +281,36 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     );
   };
 
+  // Cellule d'absence (Congés, Maladie, École...) sur toute la journée
+  const renderAbsenceCell = (employeeId: number, day: string, label: string) => {
+    return (
+      <td
+        key={`${employeeId}-${day}-absence`}
+        rowSpan={2}
+        className="border-r-4 border-r-black relative"
+        style={{ background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
+      >
+        <div className="flex items-center justify-center h-full min-h-[64px]">
+          <div className="flex items-center gap-1">
+            <CalendarOff className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-bold text-amber-700 uppercase">{label}</span>
+          </div>
+          <button
+            onClick={() => onSetAbsence(employeeId, day, null)}
+            className="absolute top-1 right-1 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+            title="Retirer l'absence"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      </td>
+    );
+  };
+
   const renderRestDayCell = (employeeId: number, day: string) => {
     return (
       <td
+        key={`${employeeId}-${day}-rest`}
         rowSpan={2}
         className="border-r-4 border-r-black relative"
         style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
@@ -282,14 +334,21 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="px-4 flex justify-between items-center">
-        <ColorPicker
-          selectedColor={selectedColor}
-          onColorChange={setSelectedColor}
-          managedColors={managedColors}
-          onManageClick={onManageColorsClick}
-          showRestDayButton
-        />
+      <div className="px-4 flex justify-between items-start gap-4 flex-wrap">
+        <div className="flex flex-col gap-2">
+          <ColorPicker
+            selectedColor={selectedColor}
+            onColorChange={setSelectedColor}
+            managedColors={managedColors}
+            onManageClick={onManageColorsClick}
+            showRestDayButton
+          />
+          <ShiftToolsBar
+            templates={shiftTemplates}
+            managedColors={managedColors}
+            onManageTemplatesClick={onManageTemplatesClick}
+          />
+        </div>
 
         <button
           onClick={() => setShowPDFModal(true)}
@@ -355,9 +414,14 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <tbody>
             {employees.map((employee, index) => {
               const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
+              const complianceIssues = getEmployeeComplianceIssues(schedules, employee.id);
               const restDays = days.map(day => {
                 const schedule = schedules[`${employee.id}-${day}`] || {};
                 return schedule.isRestDay === true;
+              });
+              const absences = days.map(day => {
+                const schedule = schedules[`${employee.id}-${day}`] || {};
+                return schedule.absence;
               });
 
               return (
@@ -389,11 +453,15 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                     </td>
                     {days.map((day, dayIdx) => {
                       const isRestDay = restDays[dayIdx];
+                      const absence = absences[dayIdx];
                       const cellKey = `${employee.id}-${day}`;
                       const isDragOver = restDayDragOverCell === cellKey;
 
                       if (isRestDay) {
                         return renderRestDayCell(employee.id, day);
+                      }
+                      if (absence) {
+                        return renderAbsenceCell(employee.id, day, absence);
                       }
 
                       return (
@@ -411,7 +479,17 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                       );
                     })}
                     <td rowSpan={2} className="border-l-4 border-l-black text-center align-middle font-medium text-blue-600 bg-white">
-                      {weeklyTotal.toFixed(2)}h
+                      <div className="flex items-center justify-center gap-1">
+                        {weeklyTotal.toFixed(2)}h
+                        {complianceIssues.length > 0 && (
+                          <span
+                            title={complianceIssues.map(i => i.message).join('\n')}
+                            className="cursor-help"
+                          >
+                            <AlertTriangle className="w-4 h-4 text-amber-500" />
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {/* Afternoon row */}
@@ -424,8 +502,8 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                       <span className="text-[0.75em] font-medium text-gray-500">APM</span>
                     </td>
                     {days.map((day, dayIdx) => {
-                      const isRestDay = restDays[dayIdx];
-                      if (isRestDay) return null; // already rendered as rowSpan=2
+                      // Repos et absences déjà rendus en rowSpan=2 sur la ligne du matin
+                      if (restDays[dayIdx] || absences[dayIdx]) return null;
                       const cellKey = `${employee.id}-${day}`;
                       const isDragOver = restDayDragOverCell === cellKey;
 

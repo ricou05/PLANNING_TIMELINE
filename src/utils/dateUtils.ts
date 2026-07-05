@@ -1,23 +1,18 @@
+// Calculs de semaines selon la norme ISO 8601 (celle des calendriers français) :
+// la semaine 1 est celle qui contient le premier jeudi de l'année (donc le 4 janvier).
+
 export function getWeekDates(weekNumber: number, year: number = new Date().getFullYear()): Date[] {
-  // Créer une date au 1er janvier de l'année
-  const date = new Date(year, 0, 1);
-  
-  // Obtenir le jour de la semaine (0-6, 0 étant dimanche)
-  const dayNum = date.getDay();
-  
-  // Reculer au lundi de la première semaine
-  // Si c'est dimanche (0), reculer de 6 jours
-  // Si c'est lundi (1), reculer de 0 jour
-  // Si c'est mardi (2), reculer de 1 jour, etc.
-  date.setDate(date.getDate() - (dayNum === 0 ? 6 : dayNum - 1));
-  
-  // Avancer jusqu'à la semaine demandée
-  date.setDate(date.getDate() + (weekNumber - 1) * 7);
-  
-  // Créer un tableau avec les 7 jours de la semaine
+  // Le lundi de la semaine ISO 1 est le lundi de la semaine contenant le 4 janvier
+  const jan4 = new Date(year, 0, 4);
+  const jan4Day = jan4.getDay() || 7; // 1 = lundi ... 7 = dimanche
+  const mondayWeek1 = new Date(year, 0, 4 - (jan4Day - 1));
+
+  const monday = new Date(mondayWeek1);
+  monday.setDate(mondayWeek1.getDate() + (weekNumber - 1) * 7);
+
   return Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(date);
-    day.setDate(date.getDate() + i);
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
     return day;
   });
 }
@@ -29,52 +24,61 @@ export function formatDate(date: Date): string {
   });
 }
 
+// Jeudi de la semaine courante : détermine à la fois le numéro et l'année ISO
+function getCurrentWeekThursday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  return d;
+}
+
 export function getCurrentWeekNumber(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneWeek = 1000 * 60 * 60 * 24 * 7;
-  const week = Math.floor(diff / oneWeek);
-  return week + 1;
+  const thursday = getCurrentWeekThursday();
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+// Année ISO de la semaine courante (peut différer de l'année civile fin décembre / début janvier)
+export function getCurrentWeekYear(): number {
+  return getCurrentWeekThursday().getFullYear();
+}
+
+// Nombre de semaines ISO dans l'année (52 ou 53) : le 28 décembre est toujours
+// dans la dernière semaine de l'année ISO
+export function getWeeksInYear(year: number): number {
+  const dec28 = new Date(year, 11, 28);
+  const thursday = new Date(dec28);
+  thursday.setDate(dec28.getDate() + 4 - (dec28.getDay() || 7));
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
 type SupportedTimestamp = Date | { toDate?: () => Date } | { seconds: number; nanoseconds?: number } | null | undefined;
 
+const FR_DATETIME_FORMAT: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
 export function formatTimestamp(timestamp: SupportedTimestamp): string {
   if (!timestamp) return '';
-  
-  // Si c'est déjà une Date
+
   if (timestamp instanceof Date) {
-    return timestamp.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return timestamp.toLocaleDateString('fr-FR', FR_DATETIME_FORMAT);
   }
-  
-  // Si c'est un Timestamp Firestore
-  if (timestamp?.toDate && typeof timestamp.toDate === 'function') {
-    return timestamp.toDate().toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+
+  // Timestamp Firestore
+  if ('toDate' in timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate().toLocaleDateString('fr-FR', FR_DATETIME_FORMAT);
   }
-  
-  // Si c'est un objet avec seconds (pour la compatibilité avec le stockage local)
+
+  // Objet { seconds } (compatibilité avec le stockage local)
   if ('seconds' in timestamp) {
-    return new Date(timestamp.seconds * 1000).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return new Date(timestamp.seconds * 1000).toLocaleDateString('fr-FR', FR_DATETIME_FORMAT);
   }
-  
+
   return '';
 }
