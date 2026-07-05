@@ -17,7 +17,7 @@ interface WeeklyScheduleProps {
   schedules: Record<string, Schedule>;
   weekNumber: number;
   year: number;
-  onScheduleChange: (employeeId: number, day: string, period: keyof Schedule, value: string) => void;
+  onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onEmployeeNameChange: (id: number, newName: string) => void;
   onEmployeeReorder: (reorderedEmployees: Employee[]) => void;
   onEmployeeDelete: (id: number) => void;
@@ -50,7 +50,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   schedules,
   weekNumber,
   year,
-  onScheduleChange,
+  onSchedulePatch,
   onEmployeeNameChange,
   onEmployeeReorder,
   onEmployeeDelete,
@@ -158,9 +158,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
 
   const handleDeletePeriod = (e: React.MouseEvent, employeeId: number, day: string, period: 'morning' | 'afternoon') => {
     e.stopPropagation();
-    onScheduleChange(employeeId, day, `${period}Start`, '');
-    onScheduleChange(employeeId, day, `${period}End`, '');
-    onScheduleChange(employeeId, day, `${period}Color`, '');
+    onSchedulePatch(employeeId, day, {
+      [`${period}Start`]: '',
+      [`${period}End`]: '',
+      [`${period}Color`]: '',
+    });
     setEditingCell(null);
   };
 
@@ -188,10 +190,10 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <TimeInput
             value={start}
             onChange={(value) => {
-              onScheduleChange(employee.id, day, startKey, value);
-              if (value && !schedule[`${period}Color`]) {
-                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
-              }
+              onSchedulePatch(employee.id, day, {
+                [startKey]: value,
+                ...(value && !schedule[`${period}Color`] ? { [`${period}Color`]: selectedColor } : {}),
+              });
             }}
             placeholder=":"
             minTime="06:30"
@@ -201,10 +203,10 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           <TimeInput
             value={end}
             onChange={(value) => {
-              onScheduleChange(employee.id, day, endKey, value);
-              if (value && !schedule[`${period}Color`]) {
-                onScheduleChange(employee.id, day, `${period}Color`, selectedColor);
-              }
+              onSchedulePatch(employee.id, day, {
+                [endKey]: value,
+                ...(value && !schedule[`${period}Color`] ? { [`${period}Color`]: selectedColor } : {}),
+              });
             }}
             placeholder=":"
             minTime="06:30"
@@ -259,6 +261,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   const renderRestDayCell = (employeeId: number, day: string) => {
     return (
       <td
+        key={`${employeeId}-${day}-rest`}
         rowSpan={2}
         className="border-r-4 border-r-black relative"
         style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}

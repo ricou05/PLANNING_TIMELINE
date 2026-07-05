@@ -8,4 +8,16 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Sépare les grosses librairies du code applicatif : meilleur cache
+        // navigateur et chargement initial plus rapide
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          firebase: ['firebase/app', 'firebase/firestore'],
+        },
+      },
+    },
+  },
 });

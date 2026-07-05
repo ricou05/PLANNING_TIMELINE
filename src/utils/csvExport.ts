@@ -5,8 +5,6 @@ const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dima
 export const generateCSV = (
   employees: Employee[],
   schedules: Record<string, Schedule>,
-  weekNumber: number,
-  year: number,
   includeColors: boolean = false
 ): string => {
   const lines: string[] = [];
@@ -88,7 +86,7 @@ export const downloadCSV = (
   year: number,
   includeColors: boolean = false
 ): void => {
-  const csv = generateCSV(employees, schedules, weekNumber, year, includeColors);
+  const csv = generateCSV(employees, schedules, includeColors);
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

@@ -1,25 +1,35 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { Schedule } from '../types';
 
 type Schedules = Record<string, Schedule>;
 
 const MAX_HISTORY = 50;
 
+interface History {
+  past: Schedules[];
+  present: Schedules;
+  future: Schedules[];
+}
+
+// L'historique complet vit dans un seul état et toutes les mises à jour sont
+// des fonctions pures : compatible StrictMode (pas d'effet de bord dans les updaters).
 export function useUndoRedo(initial: Schedules) {
-  const [schedules, setSchedulesInternal] = useState<Schedules>(initial);
-  const pastRef = useRef<Schedules[]>([]);
-  const futureRef = useRef<Schedules[]>([]);
-  const batchRef = useRef(false);
+  const [history, setHistory] = useState<History>({
+    past: [],
+    present: initial,
+    future: [],
+  });
 
   const setSchedules = useCallback(
     (updater: Schedules | ((prev: Schedules) => Schedules)) => {
-      setSchedulesInternal(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        if (!batchRef.current) {
-          pastRef.current = [...pastRef.current.slice(-(MAX_HISTORY - 1)), prev];
-          futureRef.current = [];
-        }
-        return next;
+      setHistory(h => {
+        const next = typeof updater === 'function' ? updater(h.present) : updater;
+        if (next === h.present) return h;
+        return {
+          past: [...h.past.slice(-(MAX_HISTORY - 1)), h.present],
+          present: next,
+          future: [],
+        };
       });
     },
     []
@@ -27,46 +37,45 @@ export function useUndoRedo(initial: Schedules) {
 
   const setSchedulesWithoutHistory = useCallback(
     (updater: Schedules | ((prev: Schedules) => Schedules)) => {
-      batchRef.current = true;
-      setSchedulesInternal(prev => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        return next;
-      });
-      batchRef.current = false;
+      setHistory(h => ({
+        ...h,
+        present: typeof updater === 'function' ? updater(h.present) : updater,
+      }));
     },
     []
   );
 
   const undo = useCallback(() => {
-    setSchedulesInternal(prev => {
-      if (pastRef.current.length === 0) return prev;
-      const previous = pastRef.current[pastRef.current.length - 1];
-      pastRef.current = pastRef.current.slice(0, -1);
-      futureRef.current = [...futureRef.current, prev];
-      return previous;
+    setHistory(h => {
+      if (h.past.length === 0) return h;
+      const previous = h.past[h.past.length - 1];
+      return {
+        past: h.past.slice(0, -1),
+        present: previous,
+        future: [...h.future, h.present],
+      };
     });
   }, []);
 
   const redo = useCallback(() => {
-    setSchedulesInternal(prev => {
-      if (futureRef.current.length === 0) return prev;
-      const next = futureRef.current[futureRef.current.length - 1];
-      futureRef.current = futureRef.current.slice(0, -1);
-      pastRef.current = [...pastRef.current, prev];
-      return next;
+    setHistory(h => {
+      if (h.future.length === 0) return h;
+      const next = h.future[h.future.length - 1];
+      return {
+        past: [...h.past, h.present],
+        present: next,
+        future: h.future.slice(0, -1),
+      };
     });
   }, []);
 
-  const canUndo = pastRef.current.length > 0;
-  const canRedo = futureRef.current.length > 0;
-
   return {
-    schedules,
+    schedules: history.present,
     setSchedules,
     setSchedulesWithoutHistory,
     undo,
     redo,
-    canUndo,
-    canRedo,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
   };
 }

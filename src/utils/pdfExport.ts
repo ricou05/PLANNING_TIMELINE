@@ -1,5 +1,3 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateWeeklyHours, calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
@@ -494,6 +492,11 @@ const renderToPDF = async (
   container: HTMLElement,
   filename: string,
 ): Promise<void> => {
+  // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
   container.style.position = 'absolute';
   container.style.left = '-9999px';
   container.style.top = '0';

@@ -1,7 +1,5 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Employee, Schedule, ManagedColor } from '../types';
-import { calculateDailyHours, calculateWeeklyHours } from './scheduleCalculations';
+import { calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
 import { timeToMinutes, minutesToTime, TIME_CONSTRAINTS } from './timeUtils';
 
@@ -112,9 +110,13 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
         timelineCell.appendChild(gridLine);
       }
 
-      const renderBar = (startKey: string, endKey: string, colorKey: string) => {
-        const s = schedule[startKey as keyof Schedule];
-        const e = schedule[endKey as keyof Schedule];
+      const renderBar = (
+        startKey: 'morningStart' | 'afternoonStart',
+        endKey: 'morningEnd' | 'afternoonEnd',
+        colorKey: 'morningColor' | 'afternoonColor'
+      ) => {
+        const s = schedule[startKey];
+        const e = schedule[endKey];
         if (!s || !e) return;
 
         const sMin = timeToMinutes(s);
@@ -122,7 +124,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
         const left = ((sMin - startMin) / totalMinutes) * timelineW;
         const width = ((eMin - sMin) / totalMinutes) * timelineW;
 
-        const mc = findManagedColor(managedColors, schedule[colorKey as keyof Schedule]);
+        const mc = findManagedColor(managedColors, schedule[colorKey]);
         const hex = mc ? mc.hex : '#DBEAFE';
         const textColor = mc ? getTextColorForHex(mc.hex) : '#1E3A8A';
 
@@ -204,6 +206,11 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
 };
 
 export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Promise<void> => {
+  // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
   const container = buildTimelineHTML(params);
   container.style.position = 'absolute';
   container.style.left = '-9999px';

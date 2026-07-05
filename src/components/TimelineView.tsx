@@ -21,7 +21,7 @@ interface TimelineViewProps {
   employees: Employee[];
   day: string;
   schedules: Record<string, Schedule>;
-  onScheduleChange: (employeeId: number, day: string, period: keyof Schedule, value: string) => void;
+  onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onEmployeeNameChange: (id: number, newName: string) => void;
   onEmployeeReorder: (reorderedEmployees: Employee[]) => void;
   onEmployeeDelete: (id: number) => void;
@@ -44,7 +44,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   employees,
   day,
   schedules,
-  onScheduleChange,
+  onSchedulePatch,
   onEmployeeNameChange,
   onEmployeeReorder,
   onEmployeeDelete,
@@ -69,9 +69,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [dragEnd, setDragEnd] = useState<number | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<number | null>(null);
   const [activePeriod, setActivePeriod] = useState<{
-    start: keyof Schedule;
-    end: keyof Schedule;
-    color: keyof Schedule;
+    start: 'morningStart' | 'afternoonStart';
+    end: 'morningEnd' | 'afternoonEnd';
+    color: 'morningColor' | 'afternoonColor';
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isCreating, setIsCreating] = useState(false);
@@ -171,7 +171,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handlePeriodClick = (e: React.MouseEvent, employeeId: number, period: 'morning' | 'afternoon') => {
     e.stopPropagation();
     if (!isResizing && !isDragging) {
-      onScheduleChange(employeeId, day, `${period}Color`, selectedColor);
+      onSchedulePatch(employeeId, day, { [`${period}Color`]: selectedColor });
     }
   };
 
@@ -186,9 +186,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     if (isStart || isEnd) {
       setIsResizing(isStart ? 'start' : 'end');
       setActivePeriod({
-        start: `${period}Start` as keyof Schedule,
-        end: `${period}End` as keyof Schedule,
-        color: `${period}Color` as keyof Schedule
+        start: `${period}Start`,
+        end: `${period}End`,
+        color: `${period}Color`
       });
       setDragStart(calculatePosition(schedule[`${period}Start`]));
       setDragEnd(calculatePosition(schedule[`${period}End`]));
@@ -196,9 +196,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       setIsDragging(true);
       setDragOffset(e.clientX - rect.left);
       setActivePeriod({
-        start: `${period}Start` as keyof Schedule,
-        end: `${period}End` as keyof Schedule,
-        color: `${period}Color` as keyof Schedule
+        start: `${period}Start`,
+        end: `${period}End`,
+        color: `${period}Color`
       });
       const startPos = calculatePosition(schedule[`${period}Start`]);
       const endPos = calculatePosition(schedule[`${period}End`]);
@@ -220,9 +220,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
     if ((periodType === 'morning' && !hasMorning) || (periodType === 'afternoon' && !hasAfternoon)) {
       setActivePeriod({
-        start: `${periodType}Start` as keyof Schedule,
-        end: `${periodType}End` as keyof Schedule,
-        color: `${periodType}Color` as keyof Schedule
+        start: `${periodType}Start`,
+        end: `${periodType}End`,
+        color: `${periodType}Color`
       });
       setIsCreating(true);
       setIsDragging(true);
@@ -274,16 +274,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
         if (!hasOverlap) {
           if (isCreating || isDragging) {
-            onScheduleChange(activeEmployee, day, activePeriod.start, startTime);
-            onScheduleChange(activeEmployee, day, activePeriod.end, endTime);
-            if (isCreating) {
-              onScheduleChange(activeEmployee, day, activePeriod.color, selectedColor);
-            }
+            onSchedulePatch(activeEmployee, day, {
+              [activePeriod.start]: startTime,
+              [activePeriod.end]: endTime,
+              ...(isCreating ? { [activePeriod.color]: selectedColor } : {}),
+            });
           } else if (isResizing) {
             if (isResizing === 'start') {
-              onScheduleChange(activeEmployee, day, activePeriod.start, startTime);
+              onSchedulePatch(activeEmployee, day, { [activePeriod.start]: startTime });
             } else {
-              onScheduleChange(activeEmployee, day, activePeriod.end, endTime);
+              onSchedulePatch(activeEmployee, day, { [activePeriod.end]: endTime });
             }
           }
         }
@@ -301,9 +301,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   };
 
   const handleDelete = (employeeId: number, period: 'morning' | 'afternoon') => {
-    onScheduleChange(employeeId, day, `${period}Start`, '');
-    onScheduleChange(employeeId, day, `${period}End`, '');
-    onScheduleChange(employeeId, day, `${period}Color`, '');
+    onSchedulePatch(employeeId, day, {
+      [`${period}Start`]: '',
+      [`${period}End`]: '',
+      [`${period}Color`]: '',
+    });
   };
 
   const handleExportPDF = async () => {

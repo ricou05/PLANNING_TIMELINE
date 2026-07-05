@@ -8,7 +8,7 @@ import FileMenu from './components/FileMenu/FileMenu';
 import CSVImport from './components/CSVImport';
 import ColorManagementModal from './components/ColorManagementModal';
 import { Employee, Schedule, SavedSchedule } from './types';
-import { getCurrentWeekNumber, getWeekDates, formatDate } from './utils/dateUtils';
+import { getCurrentWeekNumber, getCurrentWeekYear, getWeekDates, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
 import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
@@ -64,11 +64,10 @@ const CSVExportButton: React.FC<{ onExport: (withColors: boolean) => void }> = (
 };
 
 function App() {
-  const currentYear = new Date().getFullYear();
   const { schedules, setSchedules, setSchedulesWithoutHistory, undo, redo, canUndo, canRedo } = useUndoRedo(autoSaved?.schedules || {});
   const [activeTab, setActiveTab] = useState<'weekly' | 'excel' | string>('weekly');
   const [weekNumber, setWeekNumber] = useState(autoSaved?.weekNumber || getCurrentWeekNumber());
-  const [year, setYear] = useState(autoSaved?.year || currentYear);
+  const [year, setYear] = useState(autoSaved?.year || getCurrentWeekYear());
   const [employeeCount, setEmployeeCount] = useState(autoSaved?.employees?.length || 10);
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (autoSaved?.employees?.length) return autoSaved.employees;
@@ -118,11 +117,17 @@ function App() {
     const value = parseInt(e.target.value, 10);
     if (value >= 1 && value <= 100) {
       setEmployeeCount(value);
-      const newEmployees = Array.from({ length: value }, (_, index) => ({
-        id: index + 1,
-        name: `Employe ${index + 1}`,
-      }));
-      setEmployees(loadEmployeeOrder(newEmployees));
+      setEmployees(prev => {
+        if (value <= prev.length) {
+          return prev.slice(0, value);
+        }
+        const maxId = prev.reduce((max, emp) => Math.max(max, emp.id), 0);
+        const added = Array.from({ length: value - prev.length }, (_, index) => ({
+          id: maxId + index + 1,
+          name: `Employe ${maxId + index + 1}`,
+        }));
+        return [...prev, ...added];
+      });
     }
   };
 
@@ -136,15 +141,16 @@ function App() {
     setEmployeeCount(prev => prev + 1);
   };
 
-  const handleScheduleChange = (employeeId: number, day: string, period: keyof Schedule, value: string) => {
+  // Applique plusieurs champs d'un coup : une seule entrée dans l'historique undo/redo
+  const handleSchedulePatch = useCallback((employeeId: number, day: string, patch: Partial<Schedule>) => {
     setSchedules(prev => ({
       ...prev,
       [`${employeeId}-${day}`]: {
         ...prev[`${employeeId}-${day}`],
-        [period]: value
+        ...patch
       }
     }));
-  };
+  }, [setSchedules]);
 
   const handleEmployeeNameChange = (id: number, newName: string) => {
     setEmployees(prev => {
@@ -202,22 +208,22 @@ function App() {
             isRestDay: true,
           }
         };
-      } else {
-        const { isRestDay, ...rest } = prev[key] || {};
-        return {
-          ...prev,
-          [key]: {
-            morningStart: '',
-            morningEnd: '',
-            afternoonStart: '',
-            afternoonEnd: '',
-            ...rest,
-            isRestDay: false,
-          }
-        };
       }
+      const previous = prev[key];
+      return {
+        ...prev,
+        [key]: {
+          morningStart: previous?.morningStart ?? '',
+          morningEnd: previous?.morningEnd ?? '',
+          afternoonStart: previous?.afternoonStart ?? '',
+          afternoonEnd: previous?.afternoonEnd ?? '',
+          morningColor: previous?.morningColor,
+          afternoonColor: previous?.afternoonColor,
+          isRestDay: false,
+        }
+      };
     });
-  }, []);
+  }, [setSchedules]);
 
   const handleCopyDay = useCallback((day: string) => {
     const daySchedules: Record<string, Schedule> = {};
@@ -247,7 +253,7 @@ function App() {
       });
       return updated;
     });
-  }, [copiedDay, copiedDaySchedules, employees]);
+  }, [copiedDay, copiedDaySchedules, employees, setSchedules]);
 
   const handleNewSchedule = () => {
     if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees seront perdues.")) {
@@ -257,7 +263,7 @@ function App() {
         name: `Employe ${index + 1}`,
       })));
       setWeekNumber(getCurrentWeekNumber());
-      setYear(currentYear);
+      setYear(getCurrentWeekYear());
     }
   };
 
@@ -274,7 +280,7 @@ function App() {
           weekNumber={weekNumber}
           year={year}
           managedColors={managedColors}
-          onScheduleChange={handleScheduleChange}
+          onSchedulePatch={handleSchedulePatch}
           onManageColorsClick={() => setIsColorModalOpen(true)}
           onToggleRestDay={handleToggleRestDay}
           copiedDay={copiedDay}
@@ -291,7 +297,7 @@ function App() {
           schedules={schedules}
           weekNumber={weekNumber}
           year={year}
-          onScheduleChange={handleScheduleChange}
+          onSchedulePatch={handleSchedulePatch}
           onEmployeeNameChange={handleEmployeeNameChange}
           onEmployeeReorder={handleEmployeeReorder}
           onEmployeeDelete={handleEmployeeDelete}
@@ -322,7 +328,7 @@ function App() {
           employees={employees}
           day={activeTab}
           schedules={schedules}
-          onScheduleChange={handleScheduleChange}
+          onSchedulePatch={handleSchedulePatch}
           onEmployeeNameChange={handleEmployeeNameChange}
           onEmployeeReorder={handleEmployeeReorder}
           onEmployeeDelete={handleEmployeeDelete}

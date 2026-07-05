@@ -25,7 +25,7 @@ interface WeeklyVisualViewProps {
   weekNumber: number;
   year: number;
   managedColors: ManagedColor[];
-  onScheduleChange: (employeeId: number, day: string, period: keyof Schedule, value: string) => void;
+  onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onManageColorsClick: () => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
   copiedDay: string | null;
@@ -65,10 +65,8 @@ interface EditableShiftProps {
   end: string;
   colorId: string | undefined;
   managedColors: ManagedColor[];
-  selectedColor: string;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
-  onColorAssign: () => void;
 }
 
 const EditableShift: React.FC<EditableShiftProps> = ({
@@ -77,10 +75,8 @@ const EditableShift: React.FC<EditableShiftProps> = ({
   end,
   colorId,
   managedColors,
-  selectedColor,
   onStartChange,
   onEndChange,
-  onColorAssign,
 }) => {
   const mc = colorId ? findManagedColor(managedColors, colorId) : null;
   const bgColor = mc?.hex || undefined;
@@ -95,10 +91,7 @@ const EditableShift: React.FC<EditableShiftProps> = ({
       <div className="flex gap-0.5 items-center justify-center">
         <TimeInput
           value={start}
-          onChange={(v) => {
-            onStartChange(v);
-            if (v && !colorId) onColorAssign();
-          }}
+          onChange={onStartChange}
           placeholder=":"
           minTime="06:30"
           maxTime="20:00"
@@ -106,10 +99,7 @@ const EditableShift: React.FC<EditableShiftProps> = ({
         <span className="text-xs font-bold" style={textColor ? { color: textColor } : {}}>-</span>
         <TimeInput
           value={end}
-          onChange={(v) => {
-            onEndChange(v);
-            if (v && !colorId) onColorAssign();
-          }}
+          onChange={onEndChange}
           placeholder=":"
           minTime="06:30"
           maxTime="20:00"
@@ -125,7 +115,7 @@ interface EditableDayCellProps {
   selectedColor: string;
   employeeId: number;
   day: string;
-  onScheduleChange: (employeeId: number, day: string, period: keyof Schedule, value: string) => void;
+  onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
   isRestDayDragOver: boolean;
   onRestDayDragOver: (e: React.DragEvent) => void;
@@ -139,7 +129,7 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   selectedColor,
   employeeId,
   day,
-  onScheduleChange,
+  onSchedulePatch,
   onToggleRestDay,
   isRestDayDragOver,
   onRestDayDragOver,
@@ -204,10 +194,14 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
           end={schedule?.morningEnd || ''}
           colorId={schedule?.morningColor}
           managedColors={managedColors}
-          selectedColor={selectedColor}
-          onStartChange={(v) => onScheduleChange(employeeId, day, 'morningStart', v)}
-          onEndChange={(v) => onScheduleChange(employeeId, day, 'morningEnd', v)}
-          onColorAssign={() => onScheduleChange(employeeId, day, 'morningColor', selectedColor)}
+          onStartChange={(v) => onSchedulePatch(employeeId, day, {
+            morningStart: v,
+            ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
+          })}
+          onEndChange={(v) => onSchedulePatch(employeeId, day, {
+            morningEnd: v,
+            ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
+          })}
         />
         <EditableShift
           label="Apres-midi"
@@ -215,10 +209,14 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
           end={schedule?.afternoonEnd || ''}
           colorId={schedule?.afternoonColor}
           managedColors={managedColors}
-          selectedColor={selectedColor}
-          onStartChange={(v) => onScheduleChange(employeeId, day, 'afternoonStart', v)}
-          onEndChange={(v) => onScheduleChange(employeeId, day, 'afternoonEnd', v)}
-          onColorAssign={() => onScheduleChange(employeeId, day, 'afternoonColor', selectedColor)}
+          onStartChange={(v) => onSchedulePatch(employeeId, day, {
+            afternoonStart: v,
+            ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
+          })}
+          onEndChange={(v) => onSchedulePatch(employeeId, day, {
+            afternoonEnd: v,
+            ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
+          })}
         />
       </div>
     );
@@ -272,7 +270,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   weekNumber,
   year,
   managedColors,
-  onScheduleChange,
+  onSchedulePatch,
   onManageColorsClick,
   onToggleRestDay,
   copiedDay,
@@ -424,7 +422,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                           selectedColor={selectedColor}
                           employeeId={employee.id}
                           day={day}
-                          onScheduleChange={onScheduleChange}
+                          onSchedulePatch={onSchedulePatch}
                           onToggleRestDay={onToggleRestDay}
                           isRestDayDragOver={restDayDragOverCell === cellKey}
                           onRestDayDragOver={(e) => handleRestDayDragOver(e, cellKey)}

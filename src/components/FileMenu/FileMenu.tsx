@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2 } from 'lucide-react';
+import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
-import { SavedSchedule } from '../../types';
+import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData } from '../../hooks/useScheduleAutoSave';
 import { APP_VERSION, APP_RELEASE_DATE } from '../../version';
+
+export interface SaveData {
+  schedules: Record<string, Schedule>;
+  employees: Employee[];
+  weekNumber: number;
+  year: number;
+  colorLabels: ColorLabel[];
+}
 
 interface FileMenuProps {
   onRestore: (savedSchedule: SavedSchedule) => void;
@@ -117,7 +126,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
             weekNumber: data.weekNumber,
             year: data.year,
             colorLabels: data.colorLabels,
-            createdAt: null as any,
+            createdAt: Timestamp.now(),
           });
         }
       }
@@ -197,7 +206,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
       weekNumber: autoSave.weekNumber,
       year: autoSave.year,
       colorLabels: [],
-      createdAt: null as any,
+      createdAt: Timestamp.now(),
     };
     setSelectedSchedule(null);
     onRestore(pseudoSchedule);
