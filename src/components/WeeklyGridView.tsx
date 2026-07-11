@@ -7,21 +7,15 @@ import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculati
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
-import TimeInput from './TimeInput';
+import { EditableShift } from './WeeklyVisualView';
+import { isPlanningDrag } from '../utils/planningDrag';
 import { exportVisualToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 
-import { isPlanningDrag } from '../utils/planningDrag';
+// Teinte rosée des en-têtes de jours alternés, comme sur le planning Excel d'origine
+const HEADER_PINK = '#f4cccc';
 
-const REST_DAY_STRIPES = `repeating-linear-gradient(
-  -45deg,
-  transparent,
-  transparent 4px,
-  rgba(0,0,0,0.06) 4px,
-  rgba(0,0,0,0.06) 8px
-)`;
-
-interface WeeklyVisualViewProps {
+interface WeeklyGridViewProps {
   employees: Employee[];
   days: string[];
   dates: string[];
@@ -41,83 +35,50 @@ interface WeeklyVisualViewProps {
   onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
 }
 
-interface ShiftBlockProps {
+// Croix diagonale (style bordures Excel) recouvrant toute la cellule
+const DiagonalCross: React.FC = () => (
+  <svg
+    className="absolute inset-0 w-full h-full pointer-events-none"
+    preserveAspectRatio="none"
+    viewBox="0 0 100 100"
+  >
+    <line x1="0" y1="0" x2="100" y2="100" stroke="#374151" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+    <line x1="0" y1="100" x2="100" y2="0" stroke="#374151" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+  </svg>
+);
+
+// Demi-journée : plage horaire sur fond entièrement coloré, ou tiret si vide
+const HalfDayBlock: React.FC<{
   start: string;
   end: string;
   colorId: string | undefined;
   managedColors: ManagedColor[];
-}
+}> = ({ start, end, colorId, managedColors }) => {
+  if (!start || !end) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-gray-500 text-sm">-</span>
+      </div>
+    );
+  }
 
-const ShiftBlock: React.FC<ShiftBlockProps> = ({ start, end, colorId, managedColors }) => {
-  if (!start || !end) return null;
-
-  const mc = colorId ? findManagedColor(managedColors, colorId) : null;
+  const mc = findManagedColor(managedColors, colorId);
   const bgColor = mc?.hex || '#d1d5db';
   const textColor = getTextColorForHex(bgColor);
 
   return (
     <div
-      className="rounded px-2 py-1 text-center leading-tight w-full"
+      className="flex-1 flex items-center justify-center"
       style={{ backgroundColor: bgColor, color: textColor }}
     >
-      <span className="text-sm font-semibold whitespace-nowrap">
-        {start}–{end}
+      <span className="text-[13px] font-semibold whitespace-nowrap">
+        {start}&nbsp;&nbsp;-&nbsp;&nbsp;{end}
       </span>
     </div>
   );
 };
 
-interface EditableShiftProps {
-  label: string;
-  start: string;
-  end: string;
-  colorId: string | undefined;
-  managedColors: ManagedColor[];
-  onStartChange: (value: string) => void;
-  onEndChange: (value: string) => void;
-}
-
-export const EditableShift: React.FC<EditableShiftProps> = ({
-  label,
-  start,
-  end,
-  colorId,
-  managedColors,
-  onStartChange,
-  onEndChange,
-}) => {
-  const mc = colorId ? findManagedColor(managedColors, colorId) : null;
-  const bgColor = mc?.hex || undefined;
-  const textColor = bgColor ? getTextColorForHex(bgColor) : undefined;
-
-  return (
-    <div
-      className="rounded px-1.5 py-0.5 w-full"
-      style={bgColor ? { backgroundColor: bgColor, color: textColor } : { backgroundColor: '#f3f4f6' }}
-    >
-      <div className="text-[10px] font-medium opacity-70 mb-0.5">{label}</div>
-      <div className="flex gap-0.5 items-center justify-center">
-        <TimeInput
-          value={start}
-          onChange={onStartChange}
-          placeholder=":"
-          minTime="06:30"
-          maxTime="20:00"
-        />
-        <span className="text-xs font-bold" style={textColor ? { color: textColor } : {}}>-</span>
-        <TimeInput
-          value={end}
-          onChange={onEndChange}
-          placeholder=":"
-          minTime="06:30"
-          maxTime="20:00"
-        />
-      </div>
-    </div>
-  );
-};
-
-interface EditableDayCellProps {
+interface GridDayCellProps {
   schedule: Schedule | undefined;
   managedColors: ManagedColor[];
   selectedColor: string;
@@ -126,13 +87,13 @@ interface EditableDayCellProps {
   onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
   onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
-  isRestDayDragOver: boolean;
-  onRestDayDragOver: (e: React.DragEvent) => void;
-  onRestDayDragLeave: (e: React.DragEvent) => void;
-  onRestDayDrop: (e: React.DragEvent) => void;
+  isDragOver: boolean;
+  onCellDragOver: (e: React.DragEvent) => void;
+  onCellDragLeave: (e: React.DragEvent) => void;
+  onCellDrop: (e: React.DragEvent) => void;
 }
 
-const EditableDayCell: React.FC<EditableDayCellProps> = ({
+const GridDayCell: React.FC<GridDayCellProps> = ({
   schedule,
   managedColors,
   selectedColor,
@@ -141,10 +102,10 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   onSchedulePatch,
   onToggleRestDay,
   onSetAbsence,
-  isRestDayDragOver,
-  onRestDayDragOver,
-  onRestDayDragLeave,
-  onRestDayDrop,
+  isDragOver,
+  onCellDragOver,
+  onCellDragLeave,
+  onCellDrop,
 }) => {
   const [editing, setEditing] = useState(false);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -160,22 +121,27 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editing]);
 
+  // Jour de repos : croix diagonale sur toute la cellule, comme sur le planning Excel
   if (schedule?.isRestDay) {
     return (
       <div
-        className="flex items-center justify-center h-full min-h-[48px] relative"
-        style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
-        onDragOver={onRestDayDragOver}
-        onDragLeave={onRestDayDragLeave}
-        onDrop={onRestDayDrop}
+        className={`relative flex flex-col h-full min-h-[52px] group ${
+          isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
+        }`}
+        onDragOver={onCellDragOver}
+        onDragLeave={onCellDragLeave}
+        onDrop={onCellDrop}
       >
-        <div className="flex items-center gap-1">
-          <X className="w-4 h-4 text-red-500" strokeWidth={3} />
-          <span className="text-xs font-bold text-gray-500 uppercase">Repos</span>
+        <DiagonalCross />
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-gray-500 text-sm">-</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-gray-500 text-sm">-</span>
         </div>
         <button
           onClick={() => onToggleRestDay(employeeId, day, false)}
-          className="absolute top-0 right-0 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+          className="absolute top-0 right-0 p-0.5 text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
           title="Retirer le jour de repos"
         >
           <X className="w-3 h-3" />
@@ -187,19 +153,21 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   if (schedule?.absence) {
     return (
       <div
-        className="flex items-center justify-center h-full min-h-[48px] relative"
-        style={{ background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
-        onDragOver={onRestDayDragOver}
-        onDragLeave={onRestDayDragLeave}
-        onDrop={onRestDayDrop}
+        className={`relative flex items-center justify-center h-full min-h-[52px] group bg-amber-50 ${
+          isDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
+        }`}
+        onDragOver={onCellDragOver}
+        onDragLeave={onCellDragLeave}
+        onDrop={onCellDrop}
       >
+        <DiagonalCross />
         <div className="flex items-center gap-1">
           <CalendarOff className="w-4 h-4 text-amber-600" />
           <span className="text-xs font-bold text-amber-700 uppercase">{schedule.absence}</span>
         </div>
         <button
           onClick={() => onSetAbsence(employeeId, day, null)}
-          className="absolute top-0 right-0 p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+          className="absolute top-0 right-0 p-0.5 text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
           title="Retirer l'absence"
         >
           <X className="w-3 h-3" />
@@ -208,19 +176,16 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
     );
   }
 
-  const hasMorning = schedule?.morningStart && schedule?.morningEnd;
-  const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
-
   if (editing) {
     return (
       <div
         ref={cellRef}
-        className={`flex flex-col gap-0.5 p-0.5 min-h-[48px] justify-center ${
-          isRestDayDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
+        className={`flex flex-col gap-0.5 p-0.5 min-h-[52px] justify-center ${
+          isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
         }`}
-        onDragOver={onRestDayDragOver}
-        onDragLeave={onRestDayDragLeave}
-        onDrop={onRestDayDrop}
+        onDragOver={onCellDragOver}
+        onDragLeave={onCellDragLeave}
+        onDrop={onCellDrop}
       >
         <EditableShift
           label="Matin"
@@ -256,47 +221,35 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
     );
   }
 
-  // Display mode - click to edit
+  // Affichage : deux demi-journées empilées, remplissant toute la cellule (clic pour éditer)
   return (
     <div
-      className={`flex flex-col gap-0.5 p-1 min-h-[48px] justify-center cursor-pointer hover:bg-blue-50/50 transition-colors ${
-        isRestDayDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
+      className={`flex flex-col h-full min-h-[52px] cursor-pointer hover:brightness-95 transition-all ${
+        isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
       }`}
       onClick={() => setEditing(true)}
       title="Cliquer pour modifier"
-      onDragOver={onRestDayDragOver}
-      onDragLeave={onRestDayDragLeave}
-      onDrop={onRestDayDrop}
+      onDragOver={onCellDragOver}
+      onDragLeave={onCellDragLeave}
+      onDrop={onCellDrop}
     >
-      {!hasMorning && !hasAfternoon ? (
-        <div className="flex items-center justify-center h-full">
-          <span className="text-gray-300 text-sm">—</span>
-        </div>
-      ) : (
-        <>
-          {hasMorning && (
-            <ShiftBlock
-              start={schedule!.morningStart}
-              end={schedule!.morningEnd}
-              colorId={schedule!.morningColor}
-              managedColors={managedColors}
-            />
-          )}
-          {hasAfternoon && (
-            <ShiftBlock
-              start={schedule!.afternoonStart}
-              end={schedule!.afternoonEnd}
-              colorId={schedule!.afternoonColor}
-              managedColors={managedColors}
-            />
-          )}
-        </>
-      )}
+      <HalfDayBlock
+        start={schedule?.morningStart || ''}
+        end={schedule?.morningEnd || ''}
+        colorId={schedule?.morningColor}
+        managedColors={managedColors}
+      />
+      <HalfDayBlock
+        start={schedule?.afternoonStart || ''}
+        end={schedule?.afternoonEnd || ''}
+        colorId={schedule?.afternoonColor}
+        managedColors={managedColors}
+      />
     </div>
   );
 };
 
-const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
+const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
   employees,
   days,
   dates,
@@ -318,7 +271,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState('bleu');
-  const [restDayDragOverCell, setRestDayDragOverCell] = useState<string | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
 
   const handleExportPDF = async (options: PDFExportOptions) => {
     setShowPDFModal(false);
@@ -333,26 +286,26 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   };
 
   // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
-  const handleRestDayDragOver = (e: React.DragEvent, cellKey: string) => {
+  const handleCellDragOver = (e: React.DragEvent, cellKey: string) => {
     if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
-      setRestDayDragOverCell(cellKey);
+      setDragOverCell(cellKey);
     }
   };
 
-  const handleRestDayDragLeave = (e: React.DragEvent) => {
+  const handleCellDragLeave = (e: React.DragEvent) => {
     if (isPlanningDrag(e)) {
-      setRestDayDragOverCell(null);
+      setDragOverCell(null);
     }
   };
 
-  const handleRestDayDrop = (e: React.DragEvent, employeeId: number, day: string) => {
+  const handleCellDrop = (e: React.DragEvent, employeeId: number, day: string) => {
     if (!isPlanningDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    setRestDayDragOverCell(null);
+    setDragOverCell(null);
 
     const templateData = e.dataTransfer.getData('application/shift-template');
     const absenceLabel = e.dataTransfer.getData('application/absence');
@@ -365,9 +318,16 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
     }
   };
 
+  // Numéro du jour (le format d'entrée est "jj/mm")
+  const dayNumberOf = (date: string): string => {
+    const dayPart = date.split('/')[0];
+    const n = parseInt(dayPart, 10);
+    return Number.isNaN(n) ? date : String(n);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="px-4 flex justify-between items-start gap-4 flex-wrap">
+      <div className="px-4 pt-4 flex justify-between items-start gap-4 flex-wrap">
         <div className="flex flex-col gap-2">
           <ColorPicker
             selectedColor={selectedColor}
@@ -400,29 +360,27 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto pb-4 px-4">
         <table className="min-w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-gray-100">
+            <tr>
               <th
-                className="border border-gray-300 px-3 py-2 text-left font-bold text-gray-700 bg-gray-200 sticky left-0 z-10"
-                style={{ minWidth: 130 }}
-              >
-                EMPLOYE
-              </th>
+                className="border border-gray-700 px-3 py-1 bg-white sticky left-0 z-10"
+                style={{ minWidth: 110 }}
+              />
               {days.map((day, i) => (
                 <th
                   key={day}
-                  className="border border-gray-300 px-2 py-2 text-center font-bold text-gray-700"
-                  style={{ minWidth: 119 }}
+                  className="border border-gray-700 px-2 py-1 text-center text-gray-900"
+                  style={{ minWidth: 122, backgroundColor: i % 2 === 1 ? HEADER_PINK : '#ffffff' }}
                 >
-                  <div className="text-sm">{day}</div>
-                  <div className="text-xs font-normal text-gray-500">{dates[i]}</div>
-                  <div className="flex items-center justify-center gap-1 mt-1">
+                  <div className="text-[15px] font-bold leading-tight">{day}</div>
+                  <div className="text-sm font-normal leading-tight">{dayNumberOf(dates[i])}</div>
+                  <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={() => onCopyDay(day)}
                       title={`Copier ${day}`}
-                      className={`p-1 rounded transition-colors ${
+                      className={`p-0.5 rounded transition-colors ${
                         copiedDay === day
                           ? 'bg-blue-100 text-blue-700'
                           : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
@@ -434,7 +392,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                       <button
                         onClick={() => onPasteDay(day)}
                         title={`Coller depuis ${copiedDay}`}
-                        className="p-1 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                        className="p-0.5 rounded text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                       >
                         <ClipboardPaste className="w-3.5 h-3.5" />
                       </button>
@@ -443,36 +401,29 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                 </th>
               ))}
               <th
-                className="border border-gray-300 px-3 py-2 text-center font-bold text-gray-700 bg-gray-200"
-                style={{ minWidth: 90 }}
+                className="border border-gray-700 px-2 py-1 text-center font-bold text-gray-900 bg-white"
+                style={{ minWidth: 80 }}
               >
-                TOTAL
+                Total
               </th>
             </tr>
           </thead>
           <tbody>
-            {employees.map((employee, idx) => {
+            {employees.map((employee) => {
               const weeklyTotal = calculateWeeklyHours(schedules, employee.id);
               const complianceIssues = getEmployeeComplianceIssues(schedules, employee.id);
-              const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
 
               return (
-                <tr key={employee.id} className={`${rowBg} hover:bg-blue-50/30 transition-colors`}>
-                  <td
-                    className={`border border-gray-300 px-3 py-1 font-medium text-gray-800 sticky left-0 z-10 ${rowBg}`}
-                  >
+                <tr key={employee.id} className="bg-white">
+                  <td className="border border-gray-700 px-3 py-1 font-bold text-gray-900 sticky left-0 z-10 bg-white">
                     {employee.name}
                   </td>
                   {days.map((day) => {
-                    const schedule = schedules[`${employee.id}-${day}`];
                     const cellKey = `${employee.id}-${day}`;
                     return (
-                      <td
-                        key={cellKey}
-                        className="border border-gray-300 align-middle p-0"
-                      >
-                        <EditableDayCell
-                          schedule={schedule}
+                      <td key={cellKey} className="border border-gray-700 align-middle p-0">
+                        <GridDayCell
+                          schedule={schedules[cellKey]}
                           managedColors={managedColors}
                           selectedColor={selectedColor}
                           employeeId={employee.id}
@@ -480,17 +431,17 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                           onSchedulePatch={onSchedulePatch}
                           onToggleRestDay={onToggleRestDay}
                           onSetAbsence={onSetAbsence}
-                          isRestDayDragOver={restDayDragOverCell === cellKey}
-                          onRestDayDragOver={(e) => handleRestDayDragOver(e, cellKey)}
-                          onRestDayDragLeave={handleRestDayDragLeave}
-                          onRestDayDrop={(e) => handleRestDayDrop(e, employee.id, day)}
+                          isDragOver={dragOverCell === cellKey}
+                          onCellDragOver={(e) => handleCellDragOver(e, cellKey)}
+                          onCellDragLeave={handleCellDragLeave}
+                          onCellDrop={(e) => handleCellDrop(e, employee.id, day)}
                         />
                       </td>
                     );
                   })}
-                  <td className="border border-gray-300 text-center font-bold text-blue-700 align-middle">
+                  <td className="border border-gray-700 text-center font-bold text-gray-900 align-middle">
                     <div className="flex items-center justify-center gap-1">
-                      {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—'}
+                      {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '-'}
                       {complianceIssues.length > 0 && (
                         <span
                           title={complianceIssues.map(i => i.message).join('\n')}
@@ -505,26 +456,23 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
               );
             })}
 
-            {/* Totals row */}
-            <tr className="bg-gray-200 font-bold border-t-2 border-gray-400">
-              <td className="border border-gray-300 px-3 py-2 text-gray-800 sticky left-0 z-10 bg-gray-200">
-                TOTAUX
+            {/* Ligne des totaux par jour */}
+            <tr className="bg-gray-100 font-bold">
+              <td className="border border-gray-700 px-3 py-1.5 text-gray-900 sticky left-0 z-10 bg-gray-100">
+                Totaux
               </td>
               {days.map((day) => (
-                <td
-                  key={day}
-                  className="border border-gray-300 text-center py-2 text-blue-700"
-                >
+                <td key={day} className="border border-gray-700 text-center py-1.5 text-gray-900">
                   {(() => {
                     const t = calculateDayTotal(schedules, day);
-                    return t > 0 ? `${t.toFixed(1)}h` : '—';
+                    return t > 0 ? `${t.toFixed(1)}h` : '-';
                   })()}
                 </td>
               ))}
-              <td className="border border-gray-300 text-center py-2 text-blue-700">
+              <td className="border border-gray-700 text-center py-1.5 text-gray-900">
                 {(() => {
                   const t = calculateGrandTotal(schedules);
-                  return t > 0 ? `${t.toFixed(1)}h` : '—';
+                  return t > 0 ? `${t.toFixed(1)}h` : '-';
                 })()}
               </td>
             </tr>
@@ -535,4 +483,4 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   );
 };
 
-export default WeeklyVisualView;
+export default WeeklyGridView;

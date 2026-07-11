@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
+import WeeklyGridView from './components/WeeklyGridView';
 import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
@@ -70,7 +71,7 @@ const CSVExportButton: React.FC<{ onExport: (withColors: boolean) => void }> = (
 
 function App() {
   const { schedules, setSchedules, resetSchedules, undo, redo, canUndo, canRedo } = useUndoRedo(autoSaved?.schedules || {});
-  const [activeTab, setActiveTab] = useState<'weekly' | 'excel' | string>('weekly');
+  const [activeTab, setActiveTab] = useState<'grid' | 'weekly' | 'excel' | string>('grid');
   const [weekNumber, setWeekNumber] = useState(autoSaved?.weekNumber || getCurrentWeekNumber());
   const [year, setYear] = useState(autoSaved?.year || getCurrentWeekYear());
   // Plannings des autres semaines (la semaine affichée vit dans `schedules`)
@@ -356,7 +357,29 @@ function App() {
   const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
-    if (activeTab === 'visual') {
+    if (activeTab === 'grid') {
+      return (
+        <WeeklyGridView
+          employees={employees}
+          days={DAYS}
+          dates={weekDates.map(formatDate)}
+          schedules={schedules}
+          weekNumber={weekNumber}
+          year={year}
+          managedColors={managedColors}
+          onSchedulePatch={handleSchedulePatch}
+          onManageColorsClick={() => setIsColorModalOpen(true)}
+          onToggleRestDay={handleToggleRestDay}
+          copiedDay={copiedDay}
+          onCopyDay={handleCopyDay}
+          onPasteDay={handlePasteDay}
+          shiftTemplates={templates}
+          onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
+          onApplyTemplate={handleApplyTemplate}
+          onSetAbsence={handleSetAbsence}
+        />
+      );
+    } else if (activeTab === 'visual') {
       return (
         <WeeklyVisualView
           employees={employees}
@@ -567,19 +590,21 @@ function App() {
         <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => {
-              if (activeTab === 'weekly') setActiveTab('visual');
-              else if (activeTab === 'visual') setActiveTab('weekly');
-              else setActiveTab('weekly');
+              if (activeTab === 'grid') setActiveTab('weekly');
+              else if (activeTab === 'weekly') setActiveTab('visual');
+              else setActiveTab('grid');
             }}
             title={
-              activeTab === 'weekly'
-                ? 'Basculer vers Vue Hebdomadaire 2 (visuelle)'
+              activeTab === 'grid'
+                ? 'Basculer vers Vue Hebdomadaire 2 (édition)'
+                : activeTab === 'weekly'
+                ? 'Basculer vers Vue Hebdomadaire 3 (visuelle)'
                 : activeTab === 'visual'
-                ? 'Basculer vers Vue Hebdomadaire 1 (édition)'
+                ? 'Basculer vers Vue Hebdomadaire 1 (planning)'
                 : 'Afficher la vue hebdomadaire'
             }
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'weekly' || activeTab === 'visual'
+              ${activeTab === 'grid' || activeTab === 'weekly' || activeTab === 'visual'
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
@@ -589,14 +614,16 @@ function App() {
             ) : (
               <Calendar className="h-4 w-4" />
             )}
-            {activeTab === 'weekly'
+            {activeTab === 'grid'
               ? 'Vue Hebdomadaire 1'
-              : activeTab === 'visual'
+              : activeTab === 'weekly'
               ? 'Vue Hebdomadaire 2'
+              : activeTab === 'visual'
+              ? 'Vue Hebdomadaire 3'
               : 'Vue Hebdomadaire'}
-            {(activeTab === 'weekly' || activeTab === 'visual') && (
+            {(activeTab === 'grid' || activeTab === 'weekly' || activeTab === 'visual') && (
               <span className="ml-1 text-xs bg-white/25 rounded px-1">
-                {activeTab === 'weekly' ? '1→2' : '2→1'}
+                {activeTab === 'grid' ? '1→2' : activeTab === 'weekly' ? '2→3' : '3→1'}
               </span>
             )}
           </button>
