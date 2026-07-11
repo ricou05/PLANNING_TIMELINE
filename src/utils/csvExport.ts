@@ -55,21 +55,27 @@ export const generateCSV = (
           (schedule.afternoonStart !== '00:00' || schedule.afternoonEnd !== '00:00') &&
           schedule.afternoonStart !== schedule.afternoonEnd;
 
-        if (hasMorning) {
+        if (schedule.morningAbsence) {
+          // Absence demi-journée : le libellé remplace les horaires du matin
+          morningCells.push(schedule.morningAbsence.toUpperCase(), '');
+        } else if (hasMorning) {
           morningCells.push(schedule.morningStart, schedule.morningEnd);
         } else {
           morningCells.push('REPOS', '');
         }
 
-        if (hasAfternoon) {
+        if (schedule.afternoonAbsence) {
+          // Absence demi-journée : le libellé remplace les horaires de l'après-midi
+          afternoonCells.push(schedule.afternoonAbsence.toUpperCase(), '');
+        } else if (hasAfternoon) {
           afternoonCells.push(schedule.afternoonStart, schedule.afternoonEnd);
         } else {
           afternoonCells.push('REPOS', '');
         }
 
         if (includeColors) {
-          morningCells.push(hasMorning ? (schedule.morningColor || '') : '');
-          afternoonCells.push(hasAfternoon ? (schedule.afternoonColor || '') : '');
+          morningCells.push(hasMorning && !schedule.morningAbsence ? (schedule.morningColor || '') : '');
+          afternoonCells.push(hasAfternoon && !schedule.afternoonAbsence ? (schedule.afternoonColor || '') : '');
         }
       } else {
         morningCells.push('00:00', '00:00');

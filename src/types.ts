@@ -13,9 +13,16 @@ export interface Schedule {
   morningColor?: string;
   afternoonColor?: string;
   isRestDay?: boolean;
-  /** Libellé d'absence (Congés, Maladie, École...) — journée non travaillée */
+  /** Libellé d'absence (Congés, Maladie, École...) — journée entière non travaillée */
   absence?: string;
+  /** Libellé d'absence sur le matin uniquement (demi-journée) */
+  morningAbsence?: string;
+  /** Libellé d'absence sur l'après-midi uniquement (demi-journée) */
+  afternoonAbsence?: string;
 }
+
+/** Portée d'une absence : journée entière ou demi-journée */
+export type AbsencePeriod = 'full' | 'morning' | 'afternoon';
 
 export interface ShiftTemplate {
   id: string;
