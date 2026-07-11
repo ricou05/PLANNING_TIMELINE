@@ -75,7 +75,7 @@ const HalfDayBlock: React.FC<{
       >
         <div className="flex items-center gap-1">
           <CalendarOff className="w-3 h-3 text-amber-600" />
-          <span className="text-[11px] font-bold text-amber-700 uppercase">{absence}</span>
+          <span className="text-xs font-bold text-amber-700 uppercase">{absence}</span>
         </div>
         {onRemoveAbsence && (
           <button
@@ -93,7 +93,7 @@ const HalfDayBlock: React.FC<{
   if (!start || !end) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <span className="text-gray-500 text-sm">-</span>
+        <span className="text-gray-500 text-base">-</span>
       </div>
     );
   }
@@ -107,8 +107,8 @@ const HalfDayBlock: React.FC<{
       className="flex-1 flex items-center justify-center"
       style={{ backgroundColor: bgColor, color: textColor }}
     >
-      <span className="text-[13px] font-semibold whitespace-nowrap">
-        {start}&nbsp;&nbsp;-&nbsp;&nbsp;{end}
+      <span className="text-sm font-semibold whitespace-nowrap">
+        {start} - {end}
       </span>
     </div>
   );
@@ -460,21 +460,27 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
       </div>
 
       <div className="overflow-x-auto pb-4 px-4">
-        <table className="min-w-full border-collapse text-sm">
+        {/* Largeur bornée et colonnes en pourcentage (table-fixed) : les proportions
+            du modèle sont conservées quelle que soit la taille de la fenêtre */}
+        <table className="border-collapse text-sm w-full min-w-[960px] max-w-[1280px] mx-auto table-fixed">
+          <colgroup>
+            <col style={{ width: '12%' }} />
+            {days.map((day) => (
+              <col key={day} />
+            ))}
+            <col style={{ width: '7.5%' }} />
+          </colgroup>
           <thead>
             <tr>
-              <th
-                className="border border-gray-700 px-3 py-1 bg-white sticky left-0 z-10"
-                style={{ minWidth: 110 }}
-              />
+              <th className="border border-gray-700 px-3 py-1 bg-white sticky left-0 z-10" />
               {days.map((day, i) => (
                 <th
                   key={day}
                   className="border border-gray-700 px-2 py-1 text-center text-gray-900"
-                  style={{ minWidth: 122, backgroundColor: i % 2 === 1 ? HEADER_PINK : '#ffffff' }}
+                  style={{ backgroundColor: i % 2 === 1 ? HEADER_PINK : '#ffffff' }}
                 >
-                  <div className="text-[15px] font-bold leading-tight">{day}</div>
-                  <div className="text-sm font-normal leading-tight">{dayNumberOf(dates[i])}</div>
+                  <div className="text-base font-bold leading-tight">{day}</div>
+                  <div className="text-[15px] font-normal leading-tight">{dayNumberOf(dates[i])}</div>
                   <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={() => onCopyDay(day)}
@@ -514,7 +520,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
 
               return (
                 <tr key={employee.id} className="bg-white">
-                  <td className="border border-gray-700 px-3 py-1 font-bold text-gray-900 sticky left-0 z-10 bg-white">
+                  <td className="border border-gray-700 px-3 py-1 font-bold text-gray-900 text-[15px] sticky left-0 z-10 bg-white">
                     {employee.name}
                   </td>
                   {days.map((day) => {
@@ -540,7 +546,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                       </td>
                     );
                   })}
-                  <td className="border border-gray-700 text-center font-bold text-gray-900 align-middle">
+                  <td className="border border-gray-700 text-center font-bold text-gray-900 text-[15px] align-middle">
                     <div className="flex items-center justify-center gap-1">
                       {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '-'}
                       {complianceIssues.length > 0 && (
@@ -558,7 +564,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
             })}
 
             {/* Ligne des totaux par jour */}
-            <tr className="bg-gray-100 font-bold">
+            <tr className="bg-gray-100 font-bold text-[15px]">
               <td className="border border-gray-700 px-3 py-1.5 text-gray-900 sticky left-0 z-10 bg-gray-100">
                 Totaux
               </td>
