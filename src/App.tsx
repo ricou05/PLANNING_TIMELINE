@@ -9,7 +9,7 @@ import FileMenu from './components/FileMenu/FileMenu';
 import CSVImport from './components/CSVImport';
 import ColorManagementModal from './components/ColorManagementModal';
 import ShiftTemplateModal from './components/ShiftTemplateModal';
-import { Employee, Schedule, SavedSchedule, ShiftTemplate } from './types';
+import { Employee, Schedule, SavedSchedule, ShiftTemplate, AbsencePeriod } from './types';
 import { getCurrentWeekNumber, getCurrentWeekYear, getWeekDates, getWeeksInYear, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
@@ -192,15 +192,19 @@ function App() {
     setEmployeeCount(prev => prev + 1);
   };
 
-  // Applique plusieurs champs d'un coup : une seule entrée dans l'historique undo/redo
+  // Applique plusieurs champs d'un coup : une seule entrée dans l'historique undo/redo.
+  // Saisir un horaire sur une demi-journée lève l'absence posée sur cette demi-journée.
   const handleSchedulePatch = useCallback((employeeId: number, day: string, patch: Partial<Schedule>) => {
-    setSchedules(prev => ({
-      ...prev,
-      [`${employeeId}-${day}`]: {
-        ...prev[`${employeeId}-${day}`],
-        ...patch
+    setSchedules(prev => {
+      const merged = { ...prev[`${employeeId}-${day}`], ...patch };
+      if ((patch.morningStart || patch.morningEnd) && !('morningAbsence' in patch)) {
+        merged.morningAbsence = undefined;
       }
-    }));
+      if ((patch.afternoonStart || patch.afternoonEnd) && !('afternoonAbsence' in patch)) {
+        merged.afternoonAbsence = undefined;
+      }
+      return { ...prev, [`${employeeId}-${day}`]: merged };
+    });
   }, [setSchedules]);
 
   const handleEmployeeNameChange = (id: number, newName: string) => {
@@ -290,24 +294,52 @@ function App() {
       afternoonColor: hasAfternoon ? color : undefined,
       isRestDay: false,
       absence: undefined,
+      morningAbsence: undefined,
+      afternoonAbsence: undefined,
     });
   }, [handleSchedulePatch]);
 
-  // Marque (ou retire si label null) une absence sur une journée
-  const handleSetAbsence = useCallback((employeeId: number, day: string, label: string | null) => {
+  // Marque (ou retire si label null) une absence sur une journée entière ou une demi-journée
+  const handleSetAbsence = useCallback((employeeId: number, day: string, label: string | null, period: AbsencePeriod = 'full') => {
     if (label) {
-      handleSchedulePatch(employeeId, day, {
-        morningStart: '',
-        morningEnd: '',
-        afternoonStart: '',
-        afternoonEnd: '',
-        morningColor: undefined,
-        afternoonColor: undefined,
-        isRestDay: false,
-        absence: label,
-      });
+      if (period === 'morning') {
+        handleSchedulePatch(employeeId, day, {
+          morningStart: '',
+          morningEnd: '',
+          morningColor: undefined,
+          morningAbsence: label,
+          absence: undefined,
+          isRestDay: false,
+        });
+      } else if (period === 'afternoon') {
+        handleSchedulePatch(employeeId, day, {
+          afternoonStart: '',
+          afternoonEnd: '',
+          afternoonColor: undefined,
+          afternoonAbsence: label,
+          absence: undefined,
+          isRestDay: false,
+        });
+      } else {
+        handleSchedulePatch(employeeId, day, {
+          morningStart: '',
+          morningEnd: '',
+          afternoonStart: '',
+          afternoonEnd: '',
+          morningColor: undefined,
+          afternoonColor: undefined,
+          morningAbsence: undefined,
+          afternoonAbsence: undefined,
+          isRestDay: false,
+          absence: label,
+        });
+      }
+    } else if (period === 'morning') {
+      handleSchedulePatch(employeeId, day, { morningAbsence: undefined });
+    } else if (period === 'afternoon') {
+      handleSchedulePatch(employeeId, day, { afternoonAbsence: undefined });
     } else {
-      handleSchedulePatch(employeeId, day, { absence: undefined });
+      handleSchedulePatch(employeeId, day, { absence: undefined, morningAbsence: undefined, afternoonAbsence: undefined });
     }
   }, [handleSchedulePatch]);
 

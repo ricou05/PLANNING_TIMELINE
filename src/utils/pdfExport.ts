@@ -205,7 +205,15 @@ const createPDFTable = ({
       } else {
         const td = document.createElement('td');
         td.style.cssText = cellBase + 'border-bottom:none;' + bgColor;
-        if (schedule.morningStart && schedule.morningEnd) {
+        if (schedule.morningAbsence) {
+          // Absence demi-journée (matin) : fond ambre hachuré
+          td.style.background = `${REST_DAY_BG}, #fef3c7`;
+          td.style.fontWeight = '700';
+          td.style.color = '#b45309';
+          td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
+          td.style.textTransform = 'uppercase';
+          td.textContent = schedule.morningAbsence;
+        } else if (schedule.morningStart && schedule.morningEnd) {
           td.textContent = `${schedule.morningStart} - ${schedule.morningEnd}`;
           td.style.fontWeight = '600';
           const hex = getColorHex(managedColors, schedule.morningColor);
@@ -239,7 +247,15 @@ const createPDFTable = ({
       const schedule = schedules[`${employee.id}-${day}`] || {};
       const td = document.createElement('td');
       td.style.cssText = cellBase + bgColor;
-      if (schedule.afternoonStart && schedule.afternoonEnd) {
+      if (schedule.afternoonAbsence) {
+        // Absence demi-journée (après-midi) : fond ambre hachuré
+        td.style.background = `${REST_DAY_BG}, #fef3c7`;
+        td.style.fontWeight = '700';
+        td.style.color = '#b45309';
+        td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
+        td.style.textTransform = 'uppercase';
+        td.textContent = schedule.afternoonAbsence;
+      } else if (schedule.afternoonStart && schedule.afternoonEnd) {
         td.textContent = `${schedule.afternoonStart} - ${schedule.afternoonEnd}`;
         td.style.fontWeight = '600';
         const hex = getColorHex(managedColors, schedule.afternoonColor);
@@ -422,6 +438,16 @@ const createVisualPDFTable = ({
       const absence = schedule?.absence;
       const hasMorning = schedule?.morningStart && schedule?.morningEnd;
       const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
+      const morningAbsence = schedule?.morningAbsence;
+      const afternoonAbsence = schedule?.afternoonAbsence;
+
+      // Bloc d'absence demi-journée : fond ambre hachuré, libellé en majuscules
+      const buildHalfAbsenceBlock = (label: string): HTMLElement => {
+        const block = document.createElement('div');
+        block.style.cssText = `border-radius:3px;padding:2px 5px;text-align:center;background:${REST_DAY_BG}, #fef3c7;color:#b45309;font-size:${Math.max(7, blockFontSize - 1)}px;font-weight:700;text-transform:uppercase;white-space:nowrap;`;
+        block.textContent = label;
+        return block;
+      };
 
       if (isRestDay) {
         td.style.background = `${REST_DAY_BG}, #e5e7eb`;
@@ -436,16 +462,20 @@ const createVisualPDFTable = ({
         td.style.fontSize = `${Math.max(7, fontSize - 1)}px`;
         td.style.textTransform = 'uppercase';
         td.textContent = absence;
-      } else if (!hasMorning && !hasAfternoon) {
+      } else if (!hasMorning && !hasAfternoon && !morningAbsence && !afternoonAbsence) {
         td.style.color = '#d1d5db';
         td.textContent = '—';
       } else {
         const inner = document.createElement('div');
         inner.style.cssText = 'display:flex;flex-direction:column;gap:2px;justify-content:center;align-items:center;height:100%;';
-        if (hasMorning) {
+        if (morningAbsence) {
+          inner.appendChild(buildHalfAbsenceBlock(morningAbsence));
+        } else if (hasMorning) {
           inner.appendChild(buildShiftBlock(schedule!.morningStart, schedule!.morningEnd, schedule!.morningColor, managedColors, blockFontSize));
         }
-        if (hasAfternoon) {
+        if (afternoonAbsence) {
+          inner.appendChild(buildHalfAbsenceBlock(afternoonAbsence));
+        } else if (hasAfternoon) {
           inner.appendChild(buildShiftBlock(schedule!.afternoonStart, schedule!.afternoonEnd, schedule!.afternoonColor, managedColors, blockFontSize));
         }
         td.appendChild(inner);

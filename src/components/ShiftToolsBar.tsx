@@ -78,7 +78,7 @@ const ShiftToolsBar: React.FC<ShiftToolsBarProps> = ({
             draggable
             onDragStart={(e) => handleAbsenceDragStart(e, label)}
             className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing px-2.5 py-1 bg-amber-50 border-2 border-dashed border-amber-400 rounded-lg hover:bg-amber-100 hover:border-amber-500 transition-colors select-none"
-            title={`Glisser-déposer sur une journée pour marquer : ${label}`}
+            title={`Glisser-déposer sur une journée pour marquer : ${label} (journée entière ou demi-journée)`}
           >
             <CalendarOff className="w-3.5 h-3.5 text-amber-600" />
             <span className="text-xs font-semibold text-amber-700">{label}</span>

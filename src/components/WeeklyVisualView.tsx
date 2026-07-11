@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Download, X, Copy, ClipboardPaste, AlertTriangle, CalendarOff } from 'lucide-react';
-import { Employee, Schedule, ManagedColor, ShiftTemplate } from '../types';
+import { Employee, Schedule, ManagedColor, ShiftTemplate, AbsencePeriod } from '../types';
+import AbsencePeriodChooser from './AbsencePeriodChooser';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
@@ -38,8 +39,26 @@ interface WeeklyVisualViewProps {
   shiftTemplates: ShiftTemplate[];
   onManageTemplatesClick: () => void;
   onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
-  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
 }
+
+// Bloc d'absence sur une demi-journée (fond ambre hachuré, libellé + retrait)
+const HalfAbsenceBlock: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
+  <div
+    className="flex items-center justify-center gap-1 rounded px-2 py-1 w-full relative group/half"
+    style={{ background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
+  >
+    <CalendarOff className="w-3 h-3 text-amber-600" />
+    <span className="text-[11px] font-bold text-amber-700 uppercase">{label}</span>
+    <button
+      onClick={(e) => { e.stopPropagation(); onRemove(); }}
+      className="absolute top-0 right-0 p-0.5 text-gray-400 opacity-0 group-hover/half:opacity-100 hover:text-red-500 transition-all"
+      title="Retirer l'absence"
+    >
+      <X className="w-3 h-3" />
+    </button>
+  </div>
+);
 
 interface ShiftBlockProps {
   start: string;
@@ -125,11 +144,13 @@ interface EditableDayCellProps {
   day: string;
   onSchedulePatch: (employeeId: number, day: string, patch: Partial<Schedule>) => void;
   onToggleRestDay: (employeeId: number, day: string, isRest: boolean) => void;
-  onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
+  onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
   isRestDayDragOver: boolean;
   onRestDayDragOver: (e: React.DragEvent) => void;
   onRestDayDragLeave: (e: React.DragEvent) => void;
   onRestDayDrop: (e: React.DragEvent) => void;
+  pendingAbsenceLabel: string | null;
+  onResolvePendingAbsence: (period: AbsencePeriod | null) => void;
 }
 
 const EditableDayCell: React.FC<EditableDayCellProps> = ({
@@ -145,6 +166,8 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   onRestDayDragOver,
   onRestDayDragLeave,
   onRestDayDrop,
+  pendingAbsenceLabel,
+  onResolvePendingAbsence,
 }) => {
   const [editing, setEditing] = useState(false);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -159,6 +182,14 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editing]);
+
+  const absenceChooser = pendingAbsenceLabel && (
+    <AbsencePeriodChooser
+      label={pendingAbsenceLabel}
+      onChoose={(period) => onResolvePendingAbsence(period)}
+      onCancel={() => onResolvePendingAbsence(null)}
+    />
+  );
 
   if (schedule?.isRestDay) {
     return (
@@ -180,6 +211,7 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
         >
           <X className="w-3 h-3" />
         </button>
+        {absenceChooser}
       </div>
     );
   }
@@ -204,54 +236,72 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
         >
           <X className="w-3 h-3" />
         </button>
+        {absenceChooser}
       </div>
     );
   }
 
   const hasMorning = schedule?.morningStart && schedule?.morningEnd;
   const hasAfternoon = schedule?.afternoonStart && schedule?.afternoonEnd;
+  const morningAbsence = schedule?.morningAbsence;
+  const afternoonAbsence = schedule?.afternoonAbsence;
 
   if (editing) {
     return (
       <div
         ref={cellRef}
-        className={`flex flex-col gap-0.5 p-0.5 min-h-[48px] justify-center ${
+        className={`relative flex flex-col gap-0.5 p-0.5 min-h-[48px] justify-center ${
           isRestDayDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
         }`}
         onDragOver={onRestDayDragOver}
         onDragLeave={onRestDayDragLeave}
         onDrop={onRestDayDrop}
       >
-        <EditableShift
-          label="Matin"
-          start={schedule?.morningStart || ''}
-          end={schedule?.morningEnd || ''}
-          colorId={schedule?.morningColor}
-          managedColors={managedColors}
-          onStartChange={(v) => onSchedulePatch(employeeId, day, {
-            morningStart: v,
-            ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
-          })}
-          onEndChange={(v) => onSchedulePatch(employeeId, day, {
-            morningEnd: v,
-            ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
-          })}
-        />
-        <EditableShift
-          label="Apres-midi"
-          start={schedule?.afternoonStart || ''}
-          end={schedule?.afternoonEnd || ''}
-          colorId={schedule?.afternoonColor}
-          managedColors={managedColors}
-          onStartChange={(v) => onSchedulePatch(employeeId, day, {
-            afternoonStart: v,
-            ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
-          })}
-          onEndChange={(v) => onSchedulePatch(employeeId, day, {
-            afternoonEnd: v,
-            ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
-          })}
-        />
+        {morningAbsence ? (
+          <HalfAbsenceBlock
+            label={morningAbsence}
+            onRemove={() => onSetAbsence(employeeId, day, null, 'morning')}
+          />
+        ) : (
+          <EditableShift
+            label="Matin"
+            start={schedule?.morningStart || ''}
+            end={schedule?.morningEnd || ''}
+            colorId={schedule?.morningColor}
+            managedColors={managedColors}
+            onStartChange={(v) => onSchedulePatch(employeeId, day, {
+              morningStart: v,
+              ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
+            })}
+            onEndChange={(v) => onSchedulePatch(employeeId, day, {
+              morningEnd: v,
+              ...(v && !schedule?.morningColor ? { morningColor: selectedColor } : {}),
+            })}
+          />
+        )}
+        {afternoonAbsence ? (
+          <HalfAbsenceBlock
+            label={afternoonAbsence}
+            onRemove={() => onSetAbsence(employeeId, day, null, 'afternoon')}
+          />
+        ) : (
+          <EditableShift
+            label="Apres-midi"
+            start={schedule?.afternoonStart || ''}
+            end={schedule?.afternoonEnd || ''}
+            colorId={schedule?.afternoonColor}
+            managedColors={managedColors}
+            onStartChange={(v) => onSchedulePatch(employeeId, day, {
+              afternoonStart: v,
+              ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
+            })}
+            onEndChange={(v) => onSchedulePatch(employeeId, day, {
+              afternoonEnd: v,
+              ...(v && !schedule?.afternoonColor ? { afternoonColor: selectedColor } : {}),
+            })}
+          />
+        )}
+        {absenceChooser}
       </div>
     );
   }
@@ -259,7 +309,7 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
   // Display mode - click to edit
   return (
     <div
-      className={`flex flex-col gap-0.5 p-1 min-h-[48px] justify-center cursor-pointer hover:bg-blue-50/50 transition-colors ${
+      className={`relative flex flex-col gap-0.5 p-1 min-h-[48px] justify-center cursor-pointer hover:bg-blue-50/50 transition-colors ${
         isRestDayDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
       }`}
       onClick={() => setEditing(true)}
@@ -268,13 +318,18 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
       onDragLeave={onRestDayDragLeave}
       onDrop={onRestDayDrop}
     >
-      {!hasMorning && !hasAfternoon ? (
+      {!hasMorning && !hasAfternoon && !morningAbsence && !afternoonAbsence ? (
         <div className="flex items-center justify-center h-full">
           <span className="text-gray-300 text-sm">—</span>
         </div>
       ) : (
         <>
-          {hasMorning && (
+          {morningAbsence ? (
+            <HalfAbsenceBlock
+              label={morningAbsence}
+              onRemove={() => onSetAbsence(employeeId, day, null, 'morning')}
+            />
+          ) : hasMorning && (
             <ShiftBlock
               start={schedule!.morningStart}
               end={schedule!.morningEnd}
@@ -282,7 +337,12 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
               managedColors={managedColors}
             />
           )}
-          {hasAfternoon && (
+          {afternoonAbsence ? (
+            <HalfAbsenceBlock
+              label={afternoonAbsence}
+              onRemove={() => onSetAbsence(employeeId, day, null, 'afternoon')}
+            />
+          ) : hasAfternoon && (
             <ShiftBlock
               start={schedule!.afternoonStart}
               end={schedule!.afternoonEnd}
@@ -292,6 +352,7 @@ const EditableDayCell: React.FC<EditableDayCellProps> = ({
           )}
         </>
       )}
+      {absenceChooser}
     </div>
   );
 };
@@ -319,6 +380,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState('bleu');
   const [restDayDragOverCell, setRestDayDragOverCell] = useState<string | null>(null);
+  const [pendingAbsence, setPendingAbsence] = useState<{ cellKey: string; employeeId: number; day: string; label: string } | null>(null);
 
   const handleExportPDF = async (options: PDFExportOptions) => {
     setShowPDFModal(false);
@@ -359,10 +421,18 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
     if (templateData) {
       onApplyTemplate(employeeId, day, JSON.parse(templateData) as ShiftTemplate, selectedColor);
     } else if (absenceLabel) {
-      onSetAbsence(employeeId, day, absenceLabel);
+      // La portée (journée / matin / après-midi) est choisie dans un petit panneau sur la cellule
+      setPendingAbsence({ cellKey: `${employeeId}-${day}`, employeeId, day, label: absenceLabel });
     } else {
       onToggleRestDay(employeeId, day, true);
     }
+  };
+
+  const resolvePendingAbsence = (period: AbsencePeriod | null) => {
+    if (pendingAbsence && period) {
+      onSetAbsence(pendingAbsence.employeeId, pendingAbsence.day, pendingAbsence.label, period);
+    }
+    setPendingAbsence(null);
   };
 
   return (
@@ -484,6 +554,8 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                           onRestDayDragOver={(e) => handleRestDayDragOver(e, cellKey)}
                           onRestDayDragLeave={handleRestDayDragLeave}
                           onRestDayDrop={(e) => handleRestDayDrop(e, employee.id, day)}
+                          pendingAbsenceLabel={pendingAbsence?.cellKey === cellKey ? pendingAbsence.label : null}
+                          onResolvePendingAbsence={resolvePendingAbsence}
                         />
                       </td>
                     );

@@ -132,7 +132,9 @@ export const parseCSV = (
             continue;
           }
 
-          // Libellé d'absence (CONGÉS, MALADIE...) : du texte à la place d'un horaire
+          // Libellé d'absence (CONGÉS, MALADIE...) : du texte à la place d'un horaire.
+          // Posé sur la demi-journée ; si matin et après-midi portent le même libellé,
+          // fusionné en absence journée entière.
           if (startTime && !/^\d{1,2}:\d{2}$/.test(startTime)) {
             if (!result.schedules[scheduleKey]) {
               result.schedules[scheduleKey] = {
@@ -143,7 +145,15 @@ export const parseCSV = (
               };
             }
             const label = startTime.charAt(0).toUpperCase() + startTime.slice(1).toLowerCase();
-            result.schedules[scheduleKey].absence = label;
+            const sched = result.schedules[scheduleKey];
+            if (period === 'morning') {
+              sched.morningAbsence = label;
+            } else if (sched.morningAbsence === label) {
+              sched.morningAbsence = undefined;
+              sched.absence = label;
+            } else {
+              sched.afternoonAbsence = label;
+            }
             result.importedCount++;
             continue;
           }
