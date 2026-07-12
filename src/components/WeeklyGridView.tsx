@@ -11,7 +11,7 @@ import AbsencePeriodChooser from './AbsencePeriodChooser';
 import { EditableShift } from './WeeklyVisualView';
 import { isPlanningDrag } from '../utils/planningDrag';
 import { REST_DAY_STRIPES } from '../utils/cellStyles';
-import { exportVisualToPDF } from '../utils/pdfExport';
+import { exportGridToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 
 // Teinte rosée des en-têtes de jours alternés, comme sur le planning Excel d'origine
@@ -368,7 +368,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
     setShowPDFModal(false);
     setExporting(true);
     try {
-      await exportVisualToPDF({ employees, days, dates, schedules, weekNumber, year, managedColors, options });
+      await exportGridToPDF({ employees, days, dates, schedules, weekNumber, year, managedColors, options });
     } catch {
       alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
     } finally {
