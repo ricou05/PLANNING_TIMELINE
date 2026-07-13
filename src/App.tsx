@@ -6,6 +6,7 @@ import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
 import FileMenu from './components/FileMenu/FileMenu';
+import DisplaySettingsMenu, { DisplaySettings, DEFAULT_DISPLAY_SETTINGS } from './components/DisplaySettingsMenu';
 import CSVImport from './components/CSVImport';
 import ColorManagementModal from './components/ColorManagementModal';
 import ShiftTemplateModal from './components/ShiftTemplateModal';
@@ -90,6 +91,8 @@ function App() {
   const [copiedDay, setCopiedDay] = useState<string | null>(null);
   const [copiedDaySchedules, setCopiedDaySchedules] = useState<Record<string, Schedule> | null>(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  // Options d'affichage (police, largeur de colonnes) : session uniquement, non persistées
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const { templates, saveTemplates } = useShiftTemplates();
   const weekDates = getWeekDates(weekNumber, year);
   const weekKey = weekKeyOf(year, weekNumber);
@@ -616,6 +619,7 @@ function App() {
             <CSVExportButton
               onExport={(withColors) => downloadCSV(employees, schedules, weekNumber, year, withColors)}
             />
+            <DisplaySettingsMenu settings={displaySettings} onChange={setDisplaySettings} />
           </div>
         </div>
 
@@ -691,7 +695,13 @@ function App() {
           ))}
         </div>
 
-        <div className="bg-white rounded-lg shadow-xl overflow-hidden animate-scaleIn">
+        <div
+          className="display-scope bg-white rounded-lg shadow-xl overflow-hidden animate-scaleIn"
+          style={{
+            '--font-scale': displaySettings.fontScale / 100,
+            '--col-scale': displaySettings.columnScale / 100,
+          } as React.CSSProperties}
+        >
           {renderContent()}
         </div>
       </main>

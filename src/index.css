@@ -12,6 +12,38 @@
   }
 }
 
+/* --- Options d'affichage (menu Paramètres) -----------------------------
+   Le contenu du planning est enveloppé dans .display-scope, qui porte deux
+   variables CSS pilotées par les curseurs du menu :
+     --font-scale : multiplicateur de la taille de police (1 = 100 %)
+     --col-scale  : multiplicateur de la largeur des tableaux (1 = 100 %)
+   Les règles ci-dessous recalculent les classes de taille Tailwind utilisées
+   dans les vues ; la spécificité (.display-scope .text-xs) suffit à
+   surclasser les utilitaires d'origine. Réglages non persistés : ils ne
+   changent que l'affichage en cours. */
+
+.display-scope {
+  font-size: calc(1rem * var(--font-scale, 1));
+}
+
+.display-scope .text-\[10px\] { font-size: calc(10px * var(--font-scale, 1)); }
+.display-scope .text-\[11px\] { font-size: calc(11px * var(--font-scale, 1)); }
+.display-scope .text-\[15px\] { font-size: calc(15px * var(--font-scale, 1)); }
+.display-scope .text-xs   { font-size: calc(0.75rem  * var(--font-scale, 1)); line-height: calc(1rem    * var(--font-scale, 1)); }
+.display-scope .text-sm   { font-size: calc(0.875rem * var(--font-scale, 1)); line-height: calc(1.25rem * var(--font-scale, 1)); }
+.display-scope .text-base { font-size: calc(1rem     * var(--font-scale, 1)); line-height: calc(1.5rem  * var(--font-scale, 1)); }
+.display-scope .text-lg   { font-size: calc(1.125rem * var(--font-scale, 1)); line-height: calc(1.75rem * var(--font-scale, 1)); }
+
+/* Largeur des colonnes : on étire (ou réduit) la largeur totale des tableaux,
+   leurs colonnes en pourcentage suivent. Les conteneurs overflow-x-auto
+   prennent le relais avec un défilement horizontal si besoin. */
+.display-scope table {
+  width: calc(100% * var(--col-scale, 1));
+}
+.display-scope table.min-w-full { min-width: calc(100% * var(--col-scale, 1)); }
+.display-scope table.min-w-\[960px\]  { min-width: calc(960px  * var(--col-scale, 1)); }
+.display-scope table.max-w-\[1280px\] { max-width: calc(1280px * var(--col-scale, 1)); }
+
 @layer utilities {
   .animate-fadeIn {
     animation: fadeIn 0.2s ease-in-out;
