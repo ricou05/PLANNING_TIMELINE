@@ -1,13 +1,57 @@
 rules_version = '2';
 
+// SÉCURITÉ : ces règles doivent être copiées-collées dans la console Firebase
+// (Firestore Database → Règles) pour être effectives. Voir GUIDE_AUTHENTIFICATION.md.
+//
+// Principe :
+//  - Personne n'accède aux données sans être connecté (Firebase Auth).
+//  - Être connecté ne suffit pas : l'email doit figurer dans la collection
+//    allowedUsers (liste blanche gérée par les admins depuis l'application).
+//  - L'admin principal (bootstrap) est codé en dur pour amorcer le système.
+//    Doit rester synchronisé avec BOOTSTRAP_ADMIN_EMAIL dans src/utils/firebase/auth.ts.
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function isBootstrapAdmin() {
+      return isSignedIn() && request.auth.token.email == 'eric.isola@gmail.com';
+    }
+
+    function allowedUserDoc() {
+      return get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
+    }
+
+    // Autorisé = admin principal OU email présent dans la liste blanche
+    function isAllowed() {
+      return isSignedIn() && (
+        isBootstrapAdmin() ||
+        exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email))
+      );
+    }
+
+    // Admin = admin principal OU fiche liste blanche avec role == 'admin'
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrapAdmin() ||
+        (
+          exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)) &&
+          allowedUserDoc().data.role == 'admin'
+        )
+      );
+    }
+
+    // ----- Plannings -----
     match /schedules/{document=**} {
-      // Autoriser la lecture et l'écriture pour tous les utilisateurs
-      allow read, write: if true;
-      
+      allow read: if isAllowed();
+      allow delete: if isAllowed();
+
       // Validation des données pour la création
-      allow create: if request.resource.data.keys().hasAll(['name', 'schedules', 'employees', 'weekNumber', 'year', 'createdAt']) &&
+      allow create: if isAllowed() &&
+                   request.resource.data.keys().hasAll(['name', 'schedules', 'employees', 'weekNumber', 'year', 'createdAt']) &&
                    request.resource.data.weekNumber is number &&
                    request.resource.data.weekNumber >= 1 &&
                    request.resource.data.weekNumber <= 53 &&
@@ -17,9 +61,10 @@ service cloud.firestore {
                    request.resource.data.employees is list &&
                    request.resource.data.name is string &&
                    request.resource.data.name.size() <= 100;
-      
+
       // Validation des données pour la mise à jour
-      allow update: if request.resource.data.keys().hasAll(['name', 'schedules', 'employees', 'weekNumber', 'year', 'updatedAt']) &&
+      allow update: if isAllowed() &&
+                   request.resource.data.keys().hasAll(['name', 'schedules', 'employees', 'weekNumber', 'year', 'updatedAt']) &&
                    request.resource.data.weekNumber is number &&
                    request.resource.data.weekNumber >= 1 &&
                    request.resource.data.weekNumber <= 53 &&
@@ -29,6 +74,23 @@ service cloud.firestore {
                    request.resource.data.employees is list &&
                    request.resource.data.name is string &&
                    request.resource.data.name.size() <= 100;
+    }
+
+    // ----- Liste blanche des utilisateurs -----
+    match /allowedUsers/{email} {
+      // Chacun peut lire sa propre fiche (vérification d'autorisation au
+      // login) ; seuls les admins voient la liste complète.
+      allow get: if isSignedIn() && (request.auth.token.email == email || isAdmin());
+      allow list: if isAdmin();
+
+      // Seuls les admins gèrent la liste ; données minimales validées.
+      allow create, update: if isAdmin() &&
+                   request.resource.data.keys().hasAll(['email', 'role']) &&
+                   request.resource.data.email == email &&
+                   request.resource.data.role in ['admin', 'user'];
+
+      // L'admin principal ne peut pas être retiré de la liste.
+      allow delete: if isAdmin() && email != 'eric.isola@gmail.com';
     }
   }
 }

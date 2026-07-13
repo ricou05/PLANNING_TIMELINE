@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2 } from 'lucide-react';
+import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
+import { useAuth } from '../../hooks/useAuth';
+import UserManagementModal from '../Auth/UserManagementModal';
 import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
@@ -37,6 +39,8 @@ const FileMenu: React.FC<FileMenuProps> = ({
   autoSaveTimestamp,
   showAutoSaveIndicator,
 }) => {
+  const { user, isAdmin, signOut } = useAuth();
+  const [showUserManagement, setShowUserManagement] = useState(false);
   const [savedSchedules, setSavedSchedules] = useState<SavedSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -321,9 +325,50 @@ const FileMenu: React.FC<FileMenuProps> = ({
               <FolderOpen className="w-4 h-4" />
               Ouvrir
             </button>
+
+            <div className="w-px h-6 bg-gray-200 mx-1" aria-hidden="true" />
+
+            {isAdmin && (
+              <button
+                onClick={() => setShowUserManagement(true)}
+                title="Gérer les utilisateurs autorisés"
+                className="flex items-center gap-2 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150"
+              >
+                <Users className="w-4 h-4" />
+                <span className="hidden xl:inline">Utilisateurs</span>
+              </button>
+            )}
+
+            <div
+              className="flex items-center gap-2 pl-2 pr-1 py-1 bg-gray-50 border border-gray-200 rounded-lg"
+              title={user?.email || ''}
+            >
+              <span
+                className={`flex items-center justify-center w-7 h-7 rounded-full flex-shrink-0 ${
+                  isAdmin ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'
+                }`}
+              >
+                {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
+              </span>
+              <span className="hidden lg:block text-xs text-gray-600 max-w-[140px] truncate">
+                {user?.email}
+              </span>
+              <button
+                onClick={signOut}
+                title="Se déconnecter"
+                className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <UserManagementModal
+        isOpen={showUserManagement}
+        onClose={() => setShowUserManagement(false)}
+      />
 
       <div className="fixed top-16 left-0 right-0 z-40 px-4">
         <div className="max-w-[95%] mx-auto">
