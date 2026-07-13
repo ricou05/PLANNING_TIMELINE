@@ -27,6 +27,8 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/too-many-requests': "Trop de tentatives. Réessayez dans quelques minutes ou réinitialisez votre mot de passe.",
   'auth/network-request-failed': "Erreur réseau. Vérifiez votre connexion Internet.",
   'auth/operation-not-allowed': "La connexion par email/mot de passe n'est pas activée dans la console Firebase (voir GUIDE_AUTHENTIFICATION.md).",
+  'auth/configuration-not-found': "L'authentification n'est pas encore activée pour ce projet. Dans la console Firebase : Authentication → Commencer → activer « Adresse e-mail/Mot de passe » (voir GUIDE_AUTHENTIFICATION.md, étape 1).",
+  'auth/admin-restricted-operation': "La création de compte est désactivée dans la console Firebase (Authentication → Settings → User actions → réactiver « Create »).",
   'auth/missing-password': "Veuillez saisir un mot de passe.",
 };
 
@@ -36,7 +38,10 @@ export const getAuthErrorMessage = (error: unknown): string => {
     return AUTH_ERROR_MESSAGES[code];
   }
   console.error('Erreur Firebase Auth non traduite:', error);
-  return "Une erreur est survenue. Veuillez réessayer.";
+  // Afficher le code technique aide à diagnostiquer les cas imprévus
+  return code
+    ? `Une erreur est survenue (code : ${code}). Veuillez réessayer.`
+    : "Une erreur est survenue. Veuillez réessayer.";
 };
 
 export const signInUser = async (email: string, password: string): Promise<User> => {
