@@ -9,6 +9,16 @@ fonctionnera pas, soit la base restera ouverte à tous.
 
 ---
 
+## Étape 0 — Vérifier que vous êtes dans le BON projet
+
+L'application utilise le projet dont l'**ID est `schedules-c28a2`** (numéro
+`719002193306`). Si votre compte Google a plusieurs projets Firebase, les
+activations faites dans un autre projet n'auront **aucun effet** sur l'app.
+
+Vérification : console Firebase → engrenage ⚙️ → **Paramètres du projet** →
+champ **« ID du projet »** = `schedules-c28a2`. Sinon, changez de projet via le
+sélecteur en haut à gauche.
+
 ## Étape 1 — Activer la connexion par email/mot de passe
 
 1. Ouvrir la [console Firebase](https://console.firebase.google.com/) → projet **schedules-c28a2**
@@ -17,6 +27,21 @@ fonctionnera pas, soit la base restera ouverte à tous.
 4. Onglet **Sign-in method** → **Ajouter un fournisseur** → **Adresse e-mail/Mot de passe**
 5. Activer le premier interrupteur (**E-mail/Mot de passe**) → **Enregistrer**
    (inutile d'activer le « lien e-mail / connexion sans mot de passe »)
+
+## Étape 1 bis (optionnelle) — Activer « Se connecter avec Google »
+
+La page de login propose aussi un bouton **« Continuer avec Google »** : pas de
+mot de passe à retenir, la liste blanche s'applique de la même manière.
+
+1. **Authentication → Sign-in method → Ajouter un fournisseur → Google**
+2. Activer, choisir l'email d'assistance → **Enregistrer**
+3. **Important** : onglet **Settings → Domaines autorisés** → vérifier que le
+   domaine de l'app (ex. `ricou05.github.io`) figure dans la liste ; sinon
+   l'ajouter avec **Ajouter un domaine** (le popup Google est refusé depuis un
+   domaine non listé).
+
+Un même email peut avoir les deux modes (Google et mot de passe) : c'est le
+même utilisateur pour la liste blanche.
 
 ## Étape 2 — Publier les nouvelles règles de sécurité (LE PLUS IMPORTANT)
 

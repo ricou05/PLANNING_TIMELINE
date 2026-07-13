@@ -6,6 +6,7 @@ export {
   normalizeEmail,
   getAuthErrorMessage,
   signInUser,
+  signInWithGoogle,
   registerUser,
   resetPassword,
   signOutUser,
