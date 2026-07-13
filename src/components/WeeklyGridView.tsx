@@ -462,7 +462,9 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
       <div className="overflow-x-auto pb-4 px-4">
         {/* Largeur bornée et colonnes en pourcentage (table-fixed) : les proportions
             du modèle sont conservées quelle que soit la taille de la fenêtre */}
-        <table className="border-collapse text-sm w-full min-w-[960px] max-w-[1280px] mx-auto table-fixed">
+        {/* grid-font-scope : seul ce tableau suit le réglage « Taille de la police »
+            du menu Paramètres (le reste de l'application garde sa taille d'origine) */}
+        <table className="grid-font-scope border-collapse text-sm w-full min-w-[960px] max-w-[1280px] mx-auto table-fixed">
           <colgroup>
             <col style={{ width: '12%' }} />
             {days.map((day) => (
