@@ -98,7 +98,7 @@ const DisplaySettingsMenu: React.FC<DisplaySettingsMenuProps> = ({ settings, onC
 
           <SettingSlider
             id="display-font-scale"
-            label="Taille de la police"
+            label="Police du tableau (Vue Hebdo 1)"
             value={settings.fontScale}
             min={70}
             max={150}
@@ -117,8 +117,10 @@ const DisplaySettingsMenu: React.FC<DisplaySettingsMenuProps> = ({ settings, onC
           />
 
           <p className="text-xs text-gray-400 leading-snug border-t border-gray-100 pt-3">
-            Ces réglages ne modifient que l'affichage en cours : ils ne sont pas
-            enregistrés et reviennent à 100 % au prochain chargement de la page.
+            La police ne s'applique qu'au tableau des heures de la Vue
+            Hebdomadaire 1. Ces réglages ne modifient que l'affichage en
+            cours : ils ne sont pas enregistrés et reviennent à 100 % au
+            prochain chargement de la page.
           </p>
         </div>
       )}

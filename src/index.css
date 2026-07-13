@@ -18,21 +18,24 @@
      --font-scale : multiplicateur de la taille de police (1 = 100 %)
      --col-scale  : multiplicateur de la largeur des tableaux (1 = 100 %)
    Les règles ci-dessous recalculent les classes de taille Tailwind utilisées
-   dans les vues ; la spécificité (.display-scope .text-xs) suffit à
-   surclasser les utilitaires d'origine. Réglages non persistés : ils ne
-   changent que l'affichage en cours. */
+   dans les vues ; leur spécificité suffit à surclasser les utilitaires
+   d'origine. Réglages non persistés : ils ne changent que l'affichage en
+   cours. */
 
-.display-scope {
-  font-size: calc(1rem * var(--font-scale, 1));
+/* Taille de la police : uniquement le tableau des heures de la Vue
+   Hebdomadaire 1 (classe .grid-font-scope posée sur ce tableau), le reste
+   de l'application garde sa taille d'origine. */
+table.grid-font-scope {
+  font-size: calc(0.875rem * var(--font-scale, 1));
 }
 
-.display-scope .text-\[10px\] { font-size: calc(10px * var(--font-scale, 1)); }
-.display-scope .text-\[11px\] { font-size: calc(11px * var(--font-scale, 1)); }
-.display-scope .text-\[15px\] { font-size: calc(15px * var(--font-scale, 1)); }
-.display-scope .text-xs   { font-size: calc(0.75rem  * var(--font-scale, 1)); line-height: calc(1rem    * var(--font-scale, 1)); }
-.display-scope .text-sm   { font-size: calc(0.875rem * var(--font-scale, 1)); line-height: calc(1.25rem * var(--font-scale, 1)); }
-.display-scope .text-base { font-size: calc(1rem     * var(--font-scale, 1)); line-height: calc(1.5rem  * var(--font-scale, 1)); }
-.display-scope .text-lg   { font-size: calc(1.125rem * var(--font-scale, 1)); line-height: calc(1.75rem * var(--font-scale, 1)); }
+.grid-font-scope .text-\[10px\] { font-size: calc(10px * var(--font-scale, 1)); }
+.grid-font-scope .text-\[11px\] { font-size: calc(11px * var(--font-scale, 1)); }
+.grid-font-scope .text-\[15px\] { font-size: calc(15px * var(--font-scale, 1)); }
+.grid-font-scope .text-xs   { font-size: calc(0.75rem  * var(--font-scale, 1)); line-height: calc(1rem    * var(--font-scale, 1)); }
+.grid-font-scope .text-sm   { font-size: calc(0.875rem * var(--font-scale, 1)); line-height: calc(1.25rem * var(--font-scale, 1)); }
+.grid-font-scope .text-base { font-size: calc(1rem     * var(--font-scale, 1)); line-height: calc(1.5rem  * var(--font-scale, 1)); }
+.grid-font-scope .text-lg   { font-size: calc(1.125rem * var(--font-scale, 1)); line-height: calc(1.75rem * var(--font-scale, 1)); }
 
 /* Largeur des colonnes : on étire (ou réduit) la largeur totale des tableaux,
    leurs colonnes en pourcentage suivent. Les conteneurs overflow-x-auto
