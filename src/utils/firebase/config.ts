@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA3d27GUFYFZR4-23cD_VkS09l1H70Ef70",
@@ -13,6 +14,10 @@ const firebaseConfig = {
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// Authentification (emails de réinitialisation, etc. envoyés en français)
+export const auth = getAuth(app);
+auth.languageCode = 'fr';
 
 // Activer la persistance hors ligne
 enableIndexedDbPersistence(db).catch((err) => {
