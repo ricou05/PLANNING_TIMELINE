@@ -412,6 +412,7 @@ function App() {
           onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
+          displaySettings={displaySettings}
         />
       );
     } else if (activeTab === 'visual') {
