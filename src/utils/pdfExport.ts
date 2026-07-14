@@ -8,6 +8,14 @@ export interface PDFExportOptions {
   format?: 'pdf' | 'png';
 }
 
+// Réglages d'affichage en cours (menu Paramètres) à reporter sur l'export
+export interface ExportDisplaySettings {
+  /** Taille de la police du tableau, en % (100 = normal) */
+  fontScale?: number;
+  /** Épaisseur des traits du tableau, en px */
+  borderWidth?: number;
+}
+
 interface ExportToPDFParams {
   employees: Employee[];
   days: string[];
@@ -17,6 +25,7 @@ interface ExportToPDFParams {
   year: number;
   managedColors: ManagedColor[];
   options?: PDFExportOptions;
+  display?: ExportDisplaySettings;
 }
 
 // A4 landscape dimensions at 96dpi
@@ -340,6 +349,7 @@ const createGridPDFTable = ({
   year,
   managedColors,
   options,
+  display,
 }: ExportToPDFParams): HTMLElement => {
   const showTotal = options?.showTotalColumn !== false;
   const hasLegend = managedColors.length > 0;
@@ -347,8 +357,14 @@ const createGridPDFTable = ({
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
   const numRows = employees.length + 2; // header + footer
   const rowH = Math.floor(tableAvailH / numRows);
-  const fontSize = Math.min(14, Math.max(9, Math.floor(rowH * 0.22)));
-  const timeFontSize = Math.min(13, Math.max(8, Math.floor(rowH * 0.21)));
+  // Réglages d'affichage en cours reportés sur l'export ; la police est
+  // bornée à la hauteur d'une demi-ligne (le format A4 étant fixe) pour
+  // que le texte ne soit jamais tronqué.
+  const fontScale = (display?.fontScale ?? 100) / 100;
+  const borderW = display?.borderWidth ?? 1;
+  const halfRowH = Math.floor(rowH / 2);
+  const fontSize = Math.min(halfRowH - 4, Math.round(Math.min(14, Math.max(9, Math.floor(rowH * 0.22))) * fontScale));
+  const timeFontSize = Math.min(halfRowH - 4, Math.round(Math.min(13, Math.max(8, Math.floor(rowH * 0.21))) * fontScale));
 
   const container = document.createElement('div');
   container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
@@ -387,7 +403,7 @@ const createGridPDFTable = ({
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   headerRow.style.height = `${rowH}px`;
-  const thBase = `border:1px solid #374151;text-align:center;vertical-align:middle;color:#111827;`;
+  const thBase = `border:${borderW}px solid #374151;text-align:center;vertical-align:middle;color:#111827;`;
 
   const thEmpty = document.createElement('th');
   thEmpty.style.cssText = thBase + 'background:#ffffff;';
@@ -411,7 +427,7 @@ const createGridPDFTable = ({
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  const cellBase = `border:1px solid #374151;vertical-align:middle;text-align:center;height:${rowH}px;`;
+  const cellBase = `border:${borderW}px solid #374151;vertical-align:middle;text-align:center;height:${rowH}px;`;
 
   // Hauteurs entières des demi-journées : évite un liseré blanc au rendu html2canvas
   const topHalfH = Math.ceil(rowH / 2);
