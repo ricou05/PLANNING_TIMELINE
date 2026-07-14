@@ -527,8 +527,10 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                   </td>
                   {days.map((day) => {
                     const cellKey = `${employee.id}-${day}`;
+                    // h-px : hauteur symbolique qui permet au contenu en h-full
+                    // de remplir toute la hauteur réelle de la ligne
                     return (
-                      <td key={cellKey} className="border border-gray-700 align-middle p-0">
+                      <td key={cellKey} className="border border-gray-700 align-middle p-0 h-px">
                         <GridDayCell
                           schedule={schedules[cellKey]}
                           managedColors={managedColors}
