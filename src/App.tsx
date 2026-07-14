@@ -700,6 +700,7 @@ function App() {
           style={{
             '--font-scale': displaySettings.fontScale / 100,
             '--col-scale': displaySettings.columnScale / 100,
+            '--table-border-width': `${displaySettings.borderWidth}px`,
           } as React.CSSProperties}
         >
           {renderContent()}

@@ -4,13 +4,15 @@ import { Settings, RotateCcw } from 'lucide-react';
 // Réglages d'affichage de la session : rien n'est enregistré, un rechargement
 // de la page revient aux valeurs par défaut (100 %).
 export interface DisplaySettings {
-  fontScale: number;   // taille de la police, en %
+  fontScale: number;   // taille de la police du tableau Vue Hebdo 1, en %
   columnScale: number; // largeur des colonnes des vues en tableau, en %
+  borderWidth: number; // épaisseur des traits du tableau Vue Hebdo 1, en px
 }
 
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   fontScale: 100,
   columnScale: 100,
+  borderWidth: 1,
 };
 
 interface DisplaySettingsMenuProps {
@@ -25,15 +27,16 @@ const SettingSlider: React.FC<{
   min: number;
   max: number;
   step: number;
+  unit?: string;
   onChange: (value: number) => void;
-}> = ({ id, label, value, min, max, step, onChange }) => (
+}> = ({ id, label, value, min, max, step, unit = '%', onChange }) => (
   <div>
     <div className="flex items-center justify-between mb-1">
       <label htmlFor={id} className="text-sm font-medium text-gray-700">
         {label}
       </label>
       <span className="text-xs font-semibold text-blue-600 tabular-nums w-12 text-right">
-        {value} %
+        {value} {unit}
       </span>
     </div>
     <input
@@ -65,7 +68,8 @@ const DisplaySettingsMenu: React.FC<DisplaySettingsMenuProps> = ({ settings, onC
 
   const isDefault =
     settings.fontScale === DEFAULT_DISPLAY_SETTINGS.fontScale &&
-    settings.columnScale === DEFAULT_DISPLAY_SETTINGS.columnScale;
+    settings.columnScale === DEFAULT_DISPLAY_SETTINGS.columnScale &&
+    settings.borderWidth === DEFAULT_DISPLAY_SETTINGS.borderWidth;
 
   return (
     <div className="relative" ref={ref}>
@@ -116,11 +120,22 @@ const DisplaySettingsMenu: React.FC<DisplaySettingsMenuProps> = ({ settings, onC
             onChange={(columnScale) => onChange({ ...settings, columnScale })}
           />
 
+          <SettingSlider
+            id="display-border-width"
+            label="Épaisseur des traits (Vue Hebdo 1)"
+            value={settings.borderWidth}
+            min={1}
+            max={4}
+            step={1}
+            unit="px"
+            onChange={(borderWidth) => onChange({ ...settings, borderWidth })}
+          />
+
           <p className="text-xs text-gray-400 leading-snug border-t border-gray-100 pt-3">
-            La police ne s'applique qu'au tableau des heures de la Vue
-            Hebdomadaire 1. Ces réglages ne modifient que l'affichage en
-            cours : ils ne sont pas enregistrés et reviennent à 100 % au
-            prochain chargement de la page.
+            La police et l'épaisseur des traits ne s'appliquent qu'au tableau
+            des heures de la Vue Hebdomadaire 1. Ces réglages ne modifient que
+            l'affichage en cours : ils ne sont pas enregistrés et reviennent
+            aux valeurs par défaut au prochain chargement de la page.
           </p>
         </div>
       )}
