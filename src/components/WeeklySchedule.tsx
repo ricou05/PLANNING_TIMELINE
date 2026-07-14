@@ -402,7 +402,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
           className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Download className="w-5 h-5" />
-          <span>Exporter PDF</span>
+          <span>Exporter PDF / PNG</span>
         </button>
 
         {showPDFModal && (

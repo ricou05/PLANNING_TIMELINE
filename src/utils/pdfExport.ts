@@ -4,6 +4,8 @@ import { findManagedColor, getTextColorForHex } from './colorUtils';
 
 export interface PDFExportOptions {
   showTotalColumn: boolean;
+  /** 'pdf' (défaut) pour impression, 'png' pour partage (WhatsApp, e-mail…) */
+  format?: 'pdf' | 'png';
 }
 
 interface ExportToPDFParams {
@@ -415,7 +417,9 @@ const createGridPDFTable = ({
   const topHalfH = Math.ceil(rowH / 2);
   const bottomHalfH = rowH - topHalfH;
 
-  // Demi-journée : plage horaire sur fond entièrement coloré, absence ambre, ou tiret
+  // Demi-journée : plage horaire sur fond entièrement coloré, absence ambre, ou tiret.
+  // Centrage vertical par line-height (égale à la hauteur du bloc) : le centrage
+  // flex est décalé vers le haut au rendu html2canvas, pas celui par line-height.
   const buildHalf = (
     start: string,
     end: string,
@@ -424,7 +428,7 @@ const createGridPDFTable = ({
     height: number,
   ): HTMLElement => {
     const half = document.createElement('div');
-    half.style.cssText = `height:${height}px;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+    half.style.cssText = `height:${height}px;line-height:${height}px;text-align:center;overflow:hidden;`;
     if (absence) {
       half.style.background = `${REST_DAY_BG}, #fef3c7`;
       half.innerHTML = `<span style="font-size:${Math.max(7, timeFontSize - 2)}px;font-weight:700;color:#b45309;text-transform:uppercase;white-space:nowrap;">${absence}</span>`;
@@ -464,9 +468,11 @@ const createGridPDFTable = ({
         buildDiagonalCross(dayColW, rowH).forEach(line => inner.appendChild(line));
       } else if (schedule?.absence) {
         // Absence journée entière : fond ambre hachuré, libellé centré + croix
+        // (centrage par line-height, fiable avec html2canvas)
         inner.style.background = `${REST_DAY_BG}, #fef3c7`;
-        inner.style.alignItems = 'center';
-        inner.style.justifyContent = 'center';
+        inner.style.display = 'block';
+        inner.style.lineHeight = `${rowH}px`;
+        inner.style.textAlign = 'center';
         inner.innerHTML = `<span style="font-size:${Math.max(7, timeFontSize - 1)}px;font-weight:700;color:#b45309;text-transform:uppercase;">${schedule.absence}</span>`;
         buildDiagonalCross(dayColW, rowH).forEach(line => inner.appendChild(line));
       } else {
@@ -766,29 +772,29 @@ const createVisualPDFTable = ({
 
 // ─── Fonction générique d'export ──────────────────────────────────────────────
 
-const renderToPDF = async (
-  container: HTMLElement,
-  filename: string,
-): Promise<void> => {
-  // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
-  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
-    import('jspdf'),
-    import('html2canvas'),
-  ]);
+// Rendu du tableau HTML en canvas haute résolution (scale 3 ≈ 300 dpi sur A4)
+const renderToCanvas = async (container: HTMLElement): Promise<HTMLCanvasElement> => {
+  // Chargée à la demande : html2canvas ne pèse pas sur le chargement initial
+  const { default: html2canvas } = await import('html2canvas');
   container.style.position = 'absolute';
   container.style.left = '-9999px';
   container.style.top = '0';
   document.body.appendChild(container);
 
-  const canvas = await html2canvas(container, {
-    scale: 2,
-    logging: false,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-  });
+  try {
+    return await html2canvas(container, {
+      scale: 3,
+      logging: false,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+    });
+  } finally {
+    document.body.removeChild(container);
+  }
+};
 
-  document.body.removeChild(container);
-
+const saveCanvasAsPDF = async (canvas: HTMLCanvasElement, filename: string): Promise<void> => {
+  const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
   const pageWidth = pdf.internal.pageSize.getWidth();   // 297mm
@@ -810,42 +816,79 @@ const renderToPDF = async (
   const x = (pageWidth - imgWidth) / 2;
   const y = (pageHeight - imgHeight) / 2;
 
-  pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 'JPEG', x, y, imgWidth, imgHeight);
+  // PNG sans perte : texte net sur les aplats de couleur. La compression 'SLOW'
+  // (flate) est indispensable : sans elle jsPDF intègre l'image non compressée
+  // et le fichier dépasse 30 Mo.
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, imgWidth, imgHeight, undefined, 'SLOW');
   pdf.save(filename);
+};
+
+const saveCanvasAsPNG = (canvas: HTMLCanvasElement, filename: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('Génération PNG impossible'));
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      resolve();
+    }, 'image/png');
+  });
+
+// Exporte le tableau en PDF ou en image PNG selon options.format
+const renderAndSave = async (
+  container: HTMLElement,
+  baseFilename: string,
+  format: 'pdf' | 'png',
+): Promise<void> => {
+  const canvas = await renderToCanvas(container);
+  if (format === 'png') {
+    await saveCanvasAsPNG(canvas, `${baseFilename}.png`);
+  } else {
+    await saveCanvasAsPDF(canvas, `${baseFilename}.pdf`);
+  }
 };
 
 export const exportToPDF = async (params: ExportToPDFParams): Promise<void> => {
   try {
-    await renderToPDF(
+    await renderAndSave(
       createPDFTable(params),
-      `planning-semaine-${params.weekNumber}-${params.year}.pdf`,
+      `planning-semaine-${params.weekNumber}-${params.year}`,
+      params.options?.format || 'pdf',
     );
   } catch (error) {
-    console.error('Erreur lors de l\'export PDF:', error);
+    console.error('Erreur lors de l\'export:', error);
     throw error;
   }
 };
 
 export const exportGridToPDF = async (params: ExportToPDFParams): Promise<void> => {
   try {
-    await renderToPDF(
+    await renderAndSave(
       createGridPDFTable(params),
-      `planning-vue1-semaine-${params.weekNumber}-${params.year}.pdf`,
+      `planning-vue1-semaine-${params.weekNumber}-${params.year}`,
+      params.options?.format || 'pdf',
     );
   } catch (error) {
-    console.error('Erreur lors de l\'export PDF:', error);
+    console.error('Erreur lors de l\'export:', error);
     throw error;
   }
 };
 
 export const exportVisualToPDF = async (params: ExportToPDFParams): Promise<void> => {
   try {
-    await renderToPDF(
+    await renderAndSave(
       createVisualPDFTable(params),
-      `planning-vue2-semaine-${params.weekNumber}-${params.year}.pdf`,
+      `planning-vue2-semaine-${params.weekNumber}-${params.year}`,
+      params.options?.format || 'pdf',
     );
   } catch (error) {
-    console.error('Erreur lors de l\'export PDF:', error);
+    console.error('Erreur lors de l\'export:', error);
     throw error;
   }
 };

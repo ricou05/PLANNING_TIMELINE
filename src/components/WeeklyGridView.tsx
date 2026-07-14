@@ -448,7 +448,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
           className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
         >
           <Download className="w-5 h-5" />
-          <span>{exporting ? 'Export en cours…' : 'Exporter PDF'}</span>
+          <span>{exporting ? 'Export en cours…' : 'Exporter PDF / PNG'}</span>
         </button>
 
         {showPDFModal && (
