@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Employee, Schedule, ManagedColor, ShiftTemplate } from '../types';
 import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
@@ -8,11 +8,19 @@ import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../ut
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
-import { X, FileDown, CalendarOff, Users } from 'lucide-react';
-
-const CELL_DRAG_TYPES = ['application/rest-day', 'application/shift-template', 'application/absence'];
-const isPlanningDrag = (e: React.DragEvent) =>
-  CELL_DRAG_TYPES.some(t => e.dataTransfer.types.includes(t));
+import { X, FileDown, CalendarOff, Users, MoveVertical, Info } from 'lucide-react';
+import {
+  isPlanningDrag,
+  isDayDrag,
+  setDayDragData,
+  getDayDragSource,
+  transferModeOf,
+  hasDayContent,
+  DayRef,
+  TransferMode,
+  DAY_DRAG_HINT,
+} from '../utils/planningDrag';
+import { RESIZE_START_CURSOR, RESIZE_END_CURSOR, EDGE_GRIP_WIDTH } from '../utils/resizeCursors';
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
   -45deg,
@@ -21,6 +29,35 @@ const REST_DAY_STRIPES = `repeating-linear-gradient(
   rgba(0,0,0,0.06) 4px,
   rgba(0,0,0,0.06) 8px
 )`;
+
+const PERIOD_DRAG_HINT =
+  "Glisser horizontalement pour décaler l'horaire, ou vers la ligne d'un autre salarié " +
+  "pour lui transférer ce créneau (Maj = toute la journée, Ctrl = copier). " +
+  "Les extrémités permettent d'allonger ou de raccourcir le créneau.";
+
+// Poignée d'extrémité d'un créneau : au survol, le curseur devient une accolade
+// (barre verticale + double flèche) pour signaler qu'on peut avancer ou reculer
+// cet horaire ; un petit trait vertical matérialise la zone de préhension.
+const EdgeGrip: React.FC<{ side: 'start' | 'end'; color: string }> = ({ side, color }) => (
+  <div
+    className={`absolute top-0 bottom-0 flex items-center group/grip ${
+      side === 'start' ? 'left-0 justify-start pl-[2px]' : 'right-0 justify-end pr-[2px]'
+    }`}
+    style={{
+      width: EDGE_GRIP_WIDTH,
+      cursor: side === 'start' ? RESIZE_START_CURSOR : RESIZE_END_CURSOR,
+      color,
+      zIndex: 2,
+    }}
+    title={
+      side === 'start'
+        ? "Glisser pour avancer ou reculer l'heure de début"
+        : "Glisser pour avancer ou reculer l'heure de fin"
+    }
+  >
+    <span className="w-[3px] h-4 rounded-full bg-current opacity-30 group-hover:opacity-60 group-hover/grip:opacity-100 transition-opacity" />
+  </div>
+);
 
 interface TimelineViewProps {
   employees: Employee[];
@@ -40,6 +77,16 @@ interface TimelineViewProps {
   onManageTemplatesClick: () => void;
   onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
   onSetAbsence: (employeeId: number, day: string, label: string | null) => void;
+  /** Déplace (ou copie) toute une journée d'un salarié vers un autre */
+  onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
+  /** Déplace (ou copie) une seule demi-journée vers un autre salarié */
+  onTransferPeriod: (
+    source: DayRef,
+    target: DayRef,
+    period: 'morning' | 'afternoon',
+    values: { start: string; end: string; color?: string },
+    mode: TransferMode
+  ) => void;
 }
 
 const HOUR_WIDTH = 80;
@@ -66,7 +113,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   shiftTemplates,
   onManageTemplatesClick,
   onApplyTemplate,
-  onSetAbsence
+  onSetAbsence,
+  onTransferDay,
+  onTransferPeriod
 }) => {
   const DAYS_LIST = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const dayIndex = DAYS_LIST.indexOf(day);
@@ -89,15 +138,40 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isCreating, setIsCreating] = useState(false);
   const [restDayDragOverEmployee, setRestDayDragOverEmployee] = useState<number | null>(null);
+  // Ligne survolée pendant un glissement : permet de transférer un créneau
+  // (ou toute la journée avec Maj) vers un autre salarié
+  const [hoverEmployee, setHoverEmployee] = useState<number | null>(null);
+  const [wholeDayTransfer, setWholeDayTransfer] = useState(false);
+  const [draggedDayEmployee, setDraggedDayEmployee] = useState<number | null>(null);
+
+  const isTransferring =
+    isDragging && !isCreating && !isResizing &&
+    activeEmployee !== null && hoverEmployee !== null && hoverEmployee !== activeEmployee;
+
+  // Pendant un redimensionnement, le curseur « accolade » reste affiché même si
+  // la souris sort du créneau
+  useEffect(() => {
+    if (!isResizing) return;
+    const previous = document.body.style.cursor;
+    document.body.style.cursor = isResizing === 'start' ? RESIZE_START_CURSOR : RESIZE_END_CURSOR;
+    return () => { document.body.style.cursor = previous; };
+  }, [isResizing]);
 
   // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
   const handleRestDayDragOver = (e: React.DragEvent, employeeId: number) => {
     if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = 'copy';
+      e.dataTransfer.dropEffect = isDayDrag(e) ? transferModeOf(e) : 'copy';
       setRestDayDragOverEmployee(employeeId);
     }
+  };
+
+  // Poignée « journée » : glisser-déposer HTML5 de toute la journée d'un salarié
+  const handleDayDragStart = (e: React.DragEvent, employeeId: number) => {
+    e.stopPropagation();
+    setDayDragData(e, { employeeId, day });
+    setDraggedDayEmployee(employeeId);
   };
 
   const handleRestDayDragLeave = (e: React.DragEvent) => {
@@ -111,6 +185,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setRestDayDragOverEmployee(null);
+
+    const daySource = getDayDragSource(e);
+    if (daySource) {
+      setDraggedDayEmployee(null);
+      onTransferDay(daySource, { employeeId, day }, transferModeOf(e));
+      return;
+    }
 
     const templateData = e.dataTransfer.getData('application/shift-template');
     const absenceLabel = e.dataTransfer.getData('application/absence');
@@ -237,8 +318,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     const schedule = schedules[`${employeeId}-${day}`] || {};
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
-    const isStart = e.clientX - rect.left < 10;
-    const isEnd = rect.right - e.clientX < 10;
+    const isStart = e.clientX - rect.left < EDGE_GRIP_WIDTH;
+    const isEnd = rect.right - e.clientX < EDGE_GRIP_WIDTH;
 
     if (isStart || isEnd) {
       setIsResizing(isStart ? 'start' : 'end');
@@ -263,6 +344,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       setDragEnd(endPos);
     }
     setActiveEmployee(employeeId);
+    setHoverEmployee(employeeId);
+    setWholeDayTransfer(e.shiftKey);
   };
 
   const handleTimelineMouseDown = (e: React.MouseEvent, employeeId: number) => {
@@ -292,6 +375,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handleTimelineMouseMove = (e: React.MouseEvent) => {
     if (!isDragging && !isResizing) return;
 
+    setWholeDayTransfer(e.shiftKey);
     const currentPosition = getPositionFromEvent(e);
 
     if (isCreating) {
@@ -316,8 +400,62 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     }
   };
 
-  const handleTimelineMouseUp = () => {
+  const resetDragState = () => {
+    setIsDragging(false);
+    setIsResizing(null);
+    setDragStart(null);
+    setDragEnd(null);
+    setActiveEmployee(null);
+    setActivePeriod(null);
+    setDragOffset(0);
+    setIsCreating(false);
+    setWholeDayTransfer(false);
+  };
+
+  // Glisser un créneau vers la ligne d'un autre salarié : le créneau (ou toute
+  // la journée si Maj est enfoncée) change de salarié. Ctrl/Cmd = copier.
+  const transferToEmployee = (e: React.MouseEvent, targetEmployeeId: number) => {
+    if (!activeEmployee || !activePeriod) return;
+    const mode = transferModeOf(e);
+    const source = { employeeId: activeEmployee, day };
+    const target = { employeeId: targetEmployeeId, day };
+
+    if (e.shiftKey) {
+      onTransferDay(source, target, mode);
+      return;
+    }
+
+    const period = activePeriod.start.includes('morning') ? 'morning' : 'afternoon';
+    const schedule = schedules[`${activeEmployee}-${day}`] || {};
+    const startTime = dragStart !== null && dragEnd !== null
+      ? getTimeFromPosition(Math.min(dragStart, dragEnd))
+      : schedule[activePeriod.start];
+    const endTime = dragStart !== null && dragEnd !== null
+      ? getTimeFromPosition(Math.max(dragStart, dragEnd))
+      : schedule[activePeriod.end];
+    if (!startTime || !endTime || startTime === endTime) return;
+
+    // Refus si le créneau déposé chevauche l'autre demi-journée du salarié cible
+    const targetSchedule = schedules[`${targetEmployeeId}-${day}`] || {};
+    const otherPeriod = getOtherPeriod(targetSchedule, period);
+    if (checkPeriodOverlap(startTime, endTime, otherPeriod.start, otherPeriod.end)) return;
+
+    onTransferPeriod(source, target, period, {
+      start: startTime,
+      end: endTime,
+      color: schedule[activePeriod.color],
+    }, mode);
+  };
+
+  const handleTimelineMouseUp = (e: React.MouseEvent, allowTransfer = true) => {
     if ((!isDragging && !isResizing) || !activeEmployee || !activePeriod) return;
+
+    // Transfert vers un autre salarié : prioritaire sur le déplacement horaire
+    if (allowTransfer && isTransferring && hoverEmployee !== null) {
+      transferToEmployee(e, hoverEmployee);
+      resetDragState();
+      return;
+    }
 
     if (dragStart !== null && dragEnd !== null) {
       const startTime = getTimeFromPosition(Math.min(dragStart, dragEnd));
@@ -347,15 +485,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       }
     }
 
-    setIsDragging(false);
-    setIsResizing(null);
-    setDragStart(null);
-    setDragEnd(null);
-    setActiveEmployee(null);
-    setActivePeriod(null);
-    setDragOffset(0);
-    setIsCreating(false);
+    resetDragState();
   };
+
+  // Sortie de la zone : on termine le geste comme un simple déplacement horaire
+  // (pas de transfert involontaire vers la dernière ligne survolée)
+  const handleTimelineMouseLeave = (e: React.MouseEvent) => {
+    setHoverEmployee(null);
+    handleTimelineMouseUp(e, false);
+  };
+
+  // Pendant un transfert, l'aperçu du créneau suit la ligne du salarié survolé
+  const ghostRowEmployee = isTransferring ? hoverEmployee : activeEmployee;
 
   const handleDelete = (employeeId: number, period: 'morning' | 'afternoon') => {
     onSchedulePatch(employeeId, day, {
@@ -400,6 +541,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             managedColors={managedColors}
             onManageTemplatesClick={onManageTemplatesClick}
           />
+          <div className="flex items-start gap-1.5 text-xs text-gray-500 max-w-2xl">
+            <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-500" />
+            <span>
+              Glissez un créneau vers la ligne d'un autre salarié pour le lui transférer
+              (<strong>Maj</strong> = toute la journée, <strong>Ctrl</strong> = copier), ou saisissez
+              ses extrémités pour avancer / reculer l'horaire. La colonne « Total jour » sert de
+              poignée pour déplacer la journée entière.
+            </span>
+          </div>
         </div>
         <button
           onClick={handleExportPDF}
@@ -412,11 +562,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       </div>
 
       <div
-        className="overflow-x-auto"
+        className={`overflow-x-auto ${isDragging || isResizing ? 'select-none' : ''}`}
         ref={timelineRef}
         onMouseMove={handleTimelineMouseMove}
         onMouseUp={handleTimelineMouseUp}
-        onMouseLeave={handleTimelineMouseUp}
+        onMouseLeave={handleTimelineMouseLeave}
       >
         <div style={{ width: totalWidth }} className="relative">
           <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
@@ -461,8 +611,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({
               const afternoonStyle = getColorStyle(schedule.afternoonColor);
               const isRestDragOver = restDayDragOverEmployee === employee.id;
 
+              const isTransferTarget = isTransferring && hoverEmployee === employee.id;
+              const canDragDay = hasDayContent(schedule);
+              const targetClass = isTransferTarget ? 'ring-2 ring-inset ring-emerald-500 bg-emerald-50' : '';
+
               return (
-                <div key={employee.id} className="flex border-b border-gray-200">
+                <div
+                  key={employee.id}
+                  className="flex border-b border-gray-200"
+                  onMouseEnter={() => setHoverEmployee(employee.id)}
+                >
                   <DraggableEmployeeList
                     employee={employee}
                     index={index}
@@ -476,7 +634,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
                   {isRestDay ? (
                     <div
-                      className={`relative flex-grow h-9 flex items-center ${
+                      className={`relative flex-grow h-9 flex items-center ${targetClass} ${
                         isRestDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
                       }`}
                       style={{ width: timelineWidth, background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
@@ -498,7 +656,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     </div>
                   ) : absence ? (
                     <div
-                      className={`relative flex-grow h-9 flex items-center ${
+                      className={`relative flex-grow h-9 flex items-center ${targetClass} ${
                         isRestDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
                       }`}
                       style={{ width: timelineWidth, background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
@@ -520,7 +678,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                     </div>
                   ) : (
                     <div
-                      className={`relative flex-grow h-9 ${
+                      className={`relative flex-grow h-9 ${targetClass} ${
                         isRestDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
                       }`}
                       style={{ width: timelineWidth }}
@@ -551,20 +709,24 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                             borderColor: morningStyle.border || '#BFDBFE',
                             zIndex: 1,
                           }}
+                          title={PERIOD_DRAG_HINT}
                           onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'morning')}
                           onClick={(e) => handlePeriodClick(e, employee.id, 'morning')}
                         >
-                          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
-                          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
+                          <EdgeGrip side="start" color={morningStyle.text || '#1E3A8A'} />
+                          <EdgeGrip side="end" color={morningStyle.text || '#1E3A8A'} />
                           <span
-                            className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                            className="text-xs px-2 leading-[28px] whitespace-nowrap pointer-events-none"
                             style={{ color: morningStyle.text || '#1E3A8A' }}
                           >
                             {schedule.morningStart} - {schedule.morningEnd}
                           </span>
                           <button
-                            onClick={() => handleDelete(employee.id, 'morning')}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(employee.id, 'morning'); }}
+                            className="absolute top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 z-[3]"
+                            style={{ right: EDGE_GRIP_WIDTH }}
+                            title="Supprimer ce créneau"
                           >
                             <X className="w-3 h-3 text-red-600" />
                           </button>
@@ -581,46 +743,75 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                             borderColor: afternoonStyle.border || '#D1D5DB',
                             zIndex: 1,
                           }}
+                          title={PERIOD_DRAG_HINT}
                           onMouseDown={(e) => handlePeriodMouseDown(e, employee.id, 'afternoon')}
                           onClick={(e) => handlePeriodClick(e, employee.id, 'afternoon')}
                         >
-                          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize" />
-                          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize" />
+                          <EdgeGrip side="start" color={afternoonStyle.text || '#374151'} />
+                          <EdgeGrip side="end" color={afternoonStyle.text || '#374151'} />
                           <span
-                            className="text-xs px-2 leading-[28px] whitespace-nowrap"
+                            className="text-xs px-2 leading-[28px] whitespace-nowrap pointer-events-none"
                             style={{ color: afternoonStyle.text || '#374151' }}
                           >
                             {schedule.afternoonStart} - {schedule.afternoonEnd}
                           </span>
                           <button
-                            onClick={() => handleDelete(employee.id, 'afternoon')}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(employee.id, 'afternoon'); }}
+                            className="absolute top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 z-[3]"
+                            style={{ right: EDGE_GRIP_WIDTH }}
+                            title="Supprimer ce créneau"
                           >
                             <X className="w-3 h-3 text-red-600" />
                           </button>
                         </div>
                       )}
 
-                      {(isCreating || isDragging || isResizing) && activeEmployee === employee.id && dragStart !== null && dragEnd !== null && (
+                      {(isCreating || isDragging || isResizing) && ghostRowEmployee === employee.id && dragStart !== null && dragEnd !== null && (
                         <div
-                          className="absolute h-7 top-1 bg-blue-100/70 border border-blue-200 border-dashed rounded pointer-events-none z-[2]"
+                          className={`absolute h-7 top-1 border border-dashed rounded pointer-events-none z-[4] ${
+                            isTransferring
+                              ? 'bg-emerald-100/80 border-emerald-400'
+                              : 'bg-blue-100/70 border-blue-200'
+                          }`}
                           style={{
                             left: Math.min(dragStart, dragEnd),
                             width: Math.abs(dragEnd - dragStart),
                           }}
                         >
-                          <span className="text-xs px-2 leading-[28px] whitespace-nowrap text-blue-800">
-                            {getTimeFromPosition(Math.min(dragStart, dragEnd))} - {getTimeFromPosition(Math.max(dragStart, dragEnd))}
+                          <span
+                            className={`text-xs px-2 leading-[28px] whitespace-nowrap ${
+                              isTransferring ? 'text-emerald-800 font-semibold' : 'text-blue-800'
+                            }`}
+                          >
+                            {isTransferring && '→ '}
+                            {wholeDayTransfer && isTransferring
+                              ? 'Journée entière'
+                              : `${getTimeFromPosition(Math.min(dragStart, dragEnd))} - ${getTimeFromPosition(Math.max(dragStart, dragEnd))}`}
                           </span>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
+                  <div
+                    style={{ width: COLUMN_WIDTH.dailyTotal }}
+                    className={`flex-shrink-0 border-l border-gray-200 flex items-center justify-center gap-1 ${
+                      canDragDay ? 'cursor-grab active:cursor-grabbing hover:bg-blue-50' : ''
+                    } ${draggedDayEmployee === employee.id ? 'opacity-40' : ''}`}
+                    {...(canDragDay
+                      ? {
+                          draggable: true,
+                          title: DAY_DRAG_HINT,
+                          onDragStart: (e: React.DragEvent) => handleDayDragStart(e, employee.id),
+                          onDragEnd: () => setDraggedDayEmployee(null),
+                        }
+                      : {})}
+                  >
                     <span className="text-sm font-medium text-blue-600">
                       {dailyHours.toFixed(2)}h
                     </span>
+                    {canDragDay && <MoveVertical className="w-3 h-3 text-gray-400" />}
                   </div>
                   <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
                     <span className="text-sm font-medium text-blue-600">

@@ -13,9 +13,17 @@ import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 
-const CELL_DRAG_TYPES = ['application/rest-day', 'application/shift-template', 'application/absence'];
-const isPlanningDrag = (e: React.DragEvent) =>
-  CELL_DRAG_TYPES.some(t => e.dataTransfer.types.includes(t));
+import {
+  isPlanningDrag,
+  isDayDrag,
+  setDayDragData,
+  getDayDragSource,
+  transferModeOf,
+  hasDayContent,
+  DayRef,
+  TransferMode,
+  DAY_DRAG_HINT,
+} from '../utils/planningDrag';
 
 interface WeeklyScheduleProps {
   employees: Employee[];
@@ -38,6 +46,8 @@ interface WeeklyScheduleProps {
   onManageTemplatesClick: () => void;
   onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
   onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
+  /** Déplace (ou copie) toute une journée d'un salarié vers un autre */
+  onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
 }
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
@@ -75,12 +85,14 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onManageTemplatesClick,
   onApplyTemplate,
   onSetAbsence,
+  onTransferDay,
 }) => {
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [restDayDragOverCell, setRestDayDragOverCell] = useState<string | null>(null);
+  const [draggedDay, setDraggedDay] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [pendingAbsence, setPendingAbsence] = useState<{ cellKey: string; employeeId: number; day: string; label: string } | null>(null);
   const editRef = useRef<HTMLDivElement>(null);
@@ -133,12 +145,13 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     setDraggedEmployeeIndex(null);
   };
 
-  // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
+  // Accepte les glisser-déposer de repos, de modèles de créneaux, d'absences et
+  // de journées transférées depuis un autre salarié
   const handleRestDayDragOver = (e: React.DragEvent, cellKey: string) => {
     if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = 'copy';
+      e.dataTransfer.dropEffect = isDayDrag(e) ? transferModeOf(e) : 'copy';
       setRestDayDragOverCell(cellKey);
     }
   };
@@ -154,6 +167,13 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setRestDayDragOverCell(null);
+
+    const daySource = getDayDragSource(e);
+    if (daySource) {
+      setDraggedDay(null);
+      onTransferDay(daySource, { employeeId, day }, transferModeOf(e));
+      return;
+    }
 
     const templateData = e.dataTransfer.getData('application/shift-template');
     const absenceLabel = e.dataTransfer.getData('application/absence');
@@ -172,6 +192,33 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
       onSetAbsence(pendingAbsence.employeeId, pendingAbsence.day, pendingAbsence.label, period);
     }
     setPendingAbsence(null);
+  };
+
+  // Propriétés de glisser-déposer d'une cellule de journée : on peut la saisir
+  // pour transférer toute la journée à un autre salarié, et y déposer un repos,
+  // un modèle, une absence ou la journée d'un autre salarié.
+  const dayCellDragProps = (employeeId: number, day: string) => {
+    const cellKey = `${employeeId}-${day}`;
+    const isEditingThisDay = editingCell?.employeeId === employeeId && editingCell?.day === day;
+    const canDrag = hasDayContent(schedules[cellKey]) && !isEditingThisDay;
+    return {
+      ...(canDrag
+        ? {
+            draggable: true,
+            title: DAY_DRAG_HINT,
+            onDragStart: (e: React.DragEvent) => {
+              // Sans cela, le <tr> déclencherait la réorganisation des salariés
+              e.stopPropagation();
+              setDayDragData(e, { employeeId, day });
+              setDraggedDay(cellKey);
+            },
+            onDragEnd: () => setDraggedDay(null),
+          }
+        : {}),
+      onDragOver: (e: React.DragEvent) => handleRestDayDragOver(e, cellKey),
+      onDragLeave: handleRestDayDragLeave,
+      onDrop: (e: React.DragEvent) => handleRestDayDrop(e, employeeId, day),
+    };
   };
 
   const getCellColors = (schedule: Schedule | undefined, period: 'morning' | 'afternoon'): { bg: string; text: string } => {
@@ -320,8 +367,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
       <td
         key={`${employeeId}-${day}-absence`}
         rowSpan={2}
-        className="border-r-4 border-r-black relative"
+        className={`border-r-4 border-r-black relative ${
+          draggedDay === `${employeeId}-${day}` ? 'opacity-40' : ''
+        } ${restDayDragOverCell === `${employeeId}-${day}` ? 'ring-2 ring-inset ring-blue-400' : ''}`}
         style={{ background: REST_DAY_STRIPES, backgroundColor: '#fef3c7' }}
+        {...dayCellDragProps(employeeId, day)}
       >
         <div className="flex items-center justify-center h-full min-h-[64px]">
           <div className="flex items-center gap-1">
@@ -352,8 +402,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
       <td
         key={`${employeeId}-${day}-rest`}
         rowSpan={2}
-        className="border-r-4 border-r-black relative"
+        className={`border-r-4 border-r-black relative ${
+          draggedDay === `${employeeId}-${day}` ? 'opacity-40' : ''
+        } ${restDayDragOverCell === `${employeeId}-${day}` ? 'ring-2 ring-inset ring-blue-400' : ''}`}
         style={{ background: REST_DAY_STRIPES, backgroundColor: '#e5e7eb' }}
+        {...dayCellDragProps(employeeId, day)}
       >
         <div className="flex items-center justify-center h-full min-h-[64px]">
           <div className="flex items-center gap-1">
@@ -515,11 +568,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                         <td
                           key={`${employee.id}-${day}-morning`}
                           className={`border-r-4 border-r-black h-8 p-0 transition-colors relative ${
-                            isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
-                          }`}
-                          onDragOver={(e) => handleRestDayDragOver(e, cellKey)}
-                          onDragLeave={handleRestDayDragLeave}
-                          onDrop={(e) => handleRestDayDrop(e, employee.id, day)}
+                            draggedDay === cellKey ? 'opacity-40' : ''
+                          } ${isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}`}
+                          {...dayCellDragProps(employee.id, day)}
                         >
                           {renderScheduleCell(employee, day, 'morning')}
                           {pendingAbsence?.cellKey === cellKey && (
@@ -565,11 +616,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                         <td
                           key={`${employee.id}-${day}-afternoon`}
                           className={`border-r-4 border-r-black h-8 p-0 transition-colors ${
-                            isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
-                          }`}
-                          onDragOver={(e) => handleRestDayDragOver(e, cellKey)}
-                          onDragLeave={handleRestDayDragLeave}
-                          onDrop={(e) => handleRestDayDrop(e, employee.id, day)}
+                            draggedDay === cellKey ? 'opacity-40' : ''
+                          } ${isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}`}
+                          {...dayCellDragProps(employee.id, day)}
                         >
                           {renderScheduleCell(employee, day, 'afternoon')}
                         </td>

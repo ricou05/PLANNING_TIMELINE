@@ -11,6 +11,7 @@ import CSVImport from './components/CSVImport';
 import ColorManagementModal from './components/ColorManagementModal';
 import ShiftTemplateModal from './components/ShiftTemplateModal';
 import { Employee, Schedule, SavedSchedule, ShiftTemplate, AbsencePeriod } from './types';
+import { DayRef, TransferMode } from './utils/planningDrag';
 import { getCurrentWeekNumber, getCurrentWeekYear, getWeekDates, getWeeksInYear, formatDate } from './utils/dateUtils';
 import { loadEmployeeOrder, saveEmployeeOrder } from './utils/employeeUtils';
 import { useManagedColors } from './hooks/useManagedColors';
@@ -20,6 +21,13 @@ import { useUndoRedo } from './hooks/useUndoRedo';
 import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+const EMPTY_DAY: Schedule = {
+  morningStart: '',
+  morningEnd: '',
+  afternoonStart: '',
+  afternoonEnd: '',
+};
 
 const weekKeyOf = (year: number, weekNumber: number): string =>
   `${year}-S${String(weekNumber).padStart(2, '0')}`;
@@ -346,6 +354,66 @@ function App() {
     }
   }, [handleSchedulePatch]);
 
+  // Déplace (ou copie, Ctrl enfoncé) toute une journée d'un salarié vers un autre
+  // salarié — ou vers un autre jour. Une seule entrée dans l'historique undo/redo.
+  const handleTransferDay = useCallback((source: DayRef, target: DayRef, mode: TransferMode) => {
+    setSchedules(prev => {
+      const sourceKey = `${source.employeeId}-${source.day}`;
+      const targetKey = `${target.employeeId}-${target.day}`;
+      if (sourceKey === targetKey) return prev;
+      const sourceSchedule = prev[sourceKey];
+      if (!sourceSchedule) return prev;
+
+      const next = { ...prev, [targetKey]: { ...sourceSchedule } };
+      if (mode === 'move') delete next[sourceKey];
+      return next;
+    });
+  }, [setSchedules]);
+
+  // Déplace (ou copie) une seule demi-journée — utilisé par la vue Timeline, où
+  // l'on fait glisser un créneau vers la ligne d'un autre salarié.
+  const handleTransferPeriod = useCallback((
+    source: DayRef,
+    target: DayRef,
+    period: 'morning' | 'afternoon',
+    values: { start: string; end: string; color?: string },
+    mode: TransferMode
+  ) => {
+    setSchedules(prev => {
+      const sourceKey = `${source.employeeId}-${source.day}`;
+      const targetKey = `${target.employeeId}-${target.day}`;
+      if (sourceKey === targetKey) return prev;
+
+      const periodPatch: Partial<Schedule> = {
+        [`${period}Start`]: values.start,
+        [`${period}End`]: values.end,
+        [`${period}Color`]: values.color,
+        [`${period}Absence`]: undefined,
+      };
+      const next: Record<string, Schedule> = {
+        ...prev,
+        [targetKey]: {
+          ...EMPTY_DAY,
+          ...prev[targetKey],
+          ...periodPatch,
+          // Déposer un créneau lève le repos / l'absence de la journée d'accueil
+          isRestDay: false,
+          absence: undefined,
+        },
+      };
+
+      if (mode === 'move' && prev[sourceKey]) {
+        next[sourceKey] = {
+          ...prev[sourceKey],
+          [`${period}Start`]: '',
+          [`${period}End`]: '',
+          [`${period}Color`]: undefined,
+        };
+      }
+      return next;
+    });
+  }, [setSchedules]);
+
   const handleCopyDay = useCallback((day: string) => {
     const daySchedules: Record<string, Schedule> = {};
     employees.forEach(emp => {
@@ -412,6 +480,7 @@ function App() {
           onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
+          onTransferDay={handleTransferDay}
           displaySettings={displaySettings}
         />
       );
@@ -435,6 +504,7 @@ function App() {
           onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
+          onTransferDay={handleTransferDay}
         />
       );
     } else if (activeTab === 'weekly') {
@@ -460,6 +530,7 @@ function App() {
           onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
+          onTransferDay={handleTransferDay}
         />
       );
     } else if (activeTab === 'excel') {
@@ -495,6 +566,8 @@ function App() {
           onManageTemplatesClick={() => setIsTemplateModalOpen(true)}
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
+          onTransferDay={handleTransferDay}
+          onTransferPeriod={handleTransferPeriod}
         />
       );
     }
