@@ -76,6 +76,13 @@ service cloud.firestore {
                    request.resource.data.name.size() <= 100;
     }
 
+    // ----- Brouillons de travail (auto-sauvegarde partagée entre PC) -----
+    // Un document par utilisateur, nommé avec son UID : chacun ne voit et
+    // n'écrit que son propre brouillon, jamais celui d'un collègue.
+    match /drafts/{uid} {
+      allow read, write: if isAllowed() && request.auth.uid == uid;
+    }
+
     // ----- Liste blanche des utilisateurs -----
     match /allowedUsers/{email} {
       // Chacun peut lire sa propre fiche (vérification d'autorisation au

@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
+import { syncLocalSchedules } from '../../utils/firebase/sync';
+import { loadCloudDraft, CloudDraft } from '../../utils/firebase/drafts';
+import { getDeviceId } from '../../utils/storage/device';
 import { useAuth } from '../../hooks/useAuth';
 import UserManagementModal from '../Auth/UserManagementModal';
 import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
-import { loadScheduleAutoSave, ScheduleAutoSaveData } from '../../hooks/useScheduleAutoSave';
+import { loadScheduleAutoSave, ScheduleAutoSaveData, CloudDraftStatus } from '../../hooks/useScheduleAutoSave';
 import { APP_VERSION, APP_RELEASE_DATE } from '../../version';
 
 export interface SaveData {
@@ -18,18 +21,36 @@ export interface SaveData {
   colorLabels: ColorLabel[];
 }
 
+export type WeeksMap = Record<string, Record<string, Schedule>>;
+
 interface FileMenuProps {
-  onRestore: (savedSchedule: SavedSchedule) => void;
+  onRestore: (savedSchedule: SavedSchedule, weeks?: WeeksMap) => void;
   onSave: () => Promise<SaveData>;
   onNewSchedule?: () => void;
   autoSaveTimestamp: string | null;
   showAutoSaveIndicator: boolean;
+  /** État de l'envoi du brouillon vers le cloud */
+  cloudDraftStatus: CloudDraftStatus;
+  /**
+   * Appelé une fois la recherche d'un brouillon plus récent terminée
+   * (récupéré ou ignoré). Tant qu'il n'a pas été appelé, l'application
+   * n'écrase pas le brouillon en ligne.
+   */
+  onCloudDraftChecked: () => void;
 }
+
+/** Écart en dessous duquel deux brouillons sont considérés équivalents. */
+const DRAFT_TOLERANCE_MS = 5000;
 
 const formatAutoSaveTime = (iso: string): string => {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} a ${pad(d.getHours())}h${pad(d.getMinutes())}`;
+};
+
+const formatTimestamp = (timestamp?: Timestamp | null): string => {
+  if (!timestamp?.toDate) return 'date inconnue';
+  return formatAutoSaveTime(timestamp.toDate().toISOString());
 };
 
 const FileMenu: React.FC<FileMenuProps> = ({
@@ -38,6 +59,8 @@ const FileMenu: React.FC<FileMenuProps> = ({
   onNewSchedule,
   autoSaveTimestamp,
   showAutoSaveIndicator,
+  cloudDraftStatus,
+  onCloudDraftChecked,
 }) => {
   const { user, isAdmin, signOut } = useAuth();
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -49,12 +72,115 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const [showSaveAsDialog, setShowSaveAsDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<SavedSchedule | null>(null);
-  const [saveName, setSaveName] = useState('');
   const [scheduleToDelete, setScheduleToDelete] = useState<SavedSchedule | null>(null);
+  const [saveName, setSaveName] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [pendingLocalCount, setPendingLocalCount] = useState(0);
+  // Sauvegarde refusée car le planning a changé en ligne entre-temps
+  const [conflict, setConflict] = useState<{
+    schedule: SavedSchedule;
+    name: string;
+    remoteUpdatedAt: Timestamp | null;
+  } | null>(null);
+  // Brouillon plus récent trouvé en ligne (autre poste)
+  const [incomingDraft, setIncomingDraft] = useState<CloudDraft | null>(null);
 
-  useEffect(() => {
-    loadSavedSchedules();
+  const loadSavedSchedules = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setWarnings([]);
+
+      const result = await getSchedules();
+      setSavedSchedules(result.schedules);
+      setPendingLocalCount(result.schedules.filter(s => s.isLocal).length);
+
+      if (result.warnings) {
+        setWarnings(result.warnings);
+      }
+    } catch (error) {
+      console.error("Error loading schedules:", error);
+      setError("Erreur lors du chargement des sauvegardes");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  /** Remonte en ligne les sauvegardes restées sur ce PC. */
+  const runSync = useCallback(async (silent = false) => {
+    setSyncing(true);
+    try {
+      const result = await syncLocalSchedules();
+      if (result.synced > 0) {
+        setSuccess(
+          result.synced === 1
+            ? '1 sauvegarde locale envoyée en ligne'
+            : `${result.synced} sauvegardes locales envoyées en ligne`
+        );
+      } else if (!silent && result.pending > 0) {
+        setWarnings([
+          result.pending === 1
+            ? '1 sauvegarde est encore sur ce PC uniquement'
+            : `${result.pending} sauvegardes sont encore sur ce PC uniquement`
+        ]);
+      }
+      return result;
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  // Au démarrage : on synchronise d'abord, puis on affiche la liste (elle
+  // reflète ainsi le résultat de la synchronisation).
+  useEffect(() => {
+    let cancelled = false;
+    const start = async () => {
+      await runSync(true);
+      if (!cancelled) await loadSavedSchedules();
+    };
+    start();
+    return () => { cancelled = true; };
+  }, [runSync, loadSavedSchedules]);
+
+  // Retour de la connexion : nouvelle tentative d'envoi.
+  useEffect(() => {
+    const onOnline = async () => {
+      const result = await runSync(true);
+      if (result.synced > 0) await loadSavedSchedules();
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [runSync, loadSavedSchedules]);
+
+  // Recherche d'un brouillon plus récent laissé sur un autre poste.
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      if (!user?.uid) {
+        onCloudDraftChecked();
+        return;
+      }
+
+      const draft = await loadCloudDraft(user.uid);
+      if (cancelled) return;
+
+      const local = loadScheduleAutoSave();
+      const localTime = local ? new Date(local.timestamp).getTime() : 0;
+      const draftTime = draft ? new Date(draft.timestamp).getTime() : 0;
+      const fromOtherDevice = !!draft && draft.deviceId !== getDeviceId();
+      const isNewer = draftTime > localTime + DRAFT_TOLERANCE_MS;
+
+      if (draft && fromOtherDevice && isNewer) {
+        setIncomingDraft(draft);
+      } else {
+        onCloudDraftChecked();
+      }
+    };
+
+    check();
+    return () => { cancelled = true; };
+  }, [user?.uid, onCloudDraftChecked]);
 
   useEffect(() => {
     if (success || error) {
@@ -66,27 +192,12 @@ const FileMenu: React.FC<FileMenuProps> = ({
     }
   }, [success, error]);
 
-  const loadSavedSchedules = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setWarnings([]);
-
-      const result = await getSchedules();
-      setSavedSchedules(result.schedules);
-
-      if (result.warnings) {
-        setWarnings(result.warnings);
-      }
-    } catch (error) {
-      console.error("Error loading schedules:", error);
-      setError("Erreur lors du chargement des sauvegardes");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async (name: string, scheduleToUpdate?: SavedSchedule) => {
+  /**
+   * Enregistre le planning courant.
+   * @param target sauvegarde à écraser, ou null pour en créer une nouvelle
+   * @param force  écraser malgré une modification concurrente détectée
+   */
+  const performSave = async (name: string, target: SavedSchedule | null, force = false) => {
     try {
       setLoading(true);
       setError(null);
@@ -100,47 +211,62 @@ const FileMenu: React.FC<FileMenuProps> = ({
         return;
       }
 
-      let result;
-      if (scheduleToUpdate) {
-        result = await updateSchedule(
-          scheduleToUpdate.id,
-          name,
-          data.schedules,
-          data.employees,
-          data.weekNumber,
-          data.year,
-          data.colorLabels
-        );
-        setSelectedSchedule({ ...scheduleToUpdate, name });
-      } else {
-        result = await saveSchedule(
-          name,
-          data.schedules,
-          data.employees,
-          data.weekNumber,
-          data.year,
-          data.colorLabels
-        );
-        if (!result.error) {
-          setSelectedSchedule({
-            id: result.id,
+      const result = target
+        ? await updateSchedule(
+            target.id,
             name,
-            schedules: data.schedules,
-            employees: data.employees,
-            weekNumber: data.weekNumber,
-            year: data.year,
-            colorLabels: data.colorLabels,
-            createdAt: Timestamp.now(),
-          });
+            data.schedules,
+            data.employees,
+            data.weekNumber,
+            data.year,
+            data.colorLabels,
+            { expectedUpdatedAt: target.updatedAt || target.createdAt, force }
+          )
+        : await saveSchedule(
+            name,
+            data.schedules,
+            data.employees,
+            data.weekNumber,
+            data.year,
+            data.colorLabels
+          );
+
+      // Modifié ailleurs : on demande confirmation au lieu d'écraser.
+      if (result.conflict && target) {
+        setConflict({ schedule: target, name, remoteUpdatedAt: result.conflict.remoteUpdatedAt });
+        return;
+      }
+
+      // Une écriture mise en file d'attente hors ligne reste une réussite :
+      // seul un échec franc doit remonter en erreur.
+      if (result.error && !result.queued) {
+        if (!result.id.startsWith('local_')) {
+          setError(result.error);
+          return;
         }
       }
 
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccess('Sauvegarde effectuee avec succes');
-        await loadSavedSchedules();
-      }
+      setSelectedSchedule({
+        id: result.id,
+        name,
+        schedules: data.schedules,
+        employees: data.employees,
+        weekNumber: data.weekNumber,
+        year: data.year,
+        colorLabels: data.colorLabels,
+        createdAt: target?.createdAt || result.updatedAt || Timestamp.now(),
+        updatedAt: result.updatedAt,
+        isLocal: result.id.startsWith('local_'),
+      });
+
+      setSuccess(
+        result.id.startsWith('local_')
+          ? 'Sauvegarde enregistrée sur ce PC'
+          : 'Sauvegarde effectuee avec succes'
+      );
+
+      await loadSavedSchedules();
+      if (result.error) setWarnings(prev => [...prev, result.error!]);
     } catch (error) {
       console.error("Error saving:", error);
       setError("Erreur lors de la sauvegarde");
@@ -151,47 +277,22 @@ const FileMenu: React.FC<FileMenuProps> = ({
     }
   };
 
-  const handleQuickSave = async () => {
+  const handleSave = (name: string, scheduleToUpdate?: SavedSchedule) =>
+    performSave(name, scheduleToUpdate || null);
+
+  const handleQuickSave = () => {
     if (!selectedSchedule) {
       setShowSaveAsDialog(true);
       return;
     }
+    return performSave(selectedSchedule.name, selectedSchedule);
+  };
 
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      const data = await onSave();
-      const validation = validateSaveData(data);
-
-      if (!validation.isValid) {
-        setError(validation.error || 'Donnees invalides');
-        return;
-      }
-
-      const result = await updateSchedule(
-        selectedSchedule.id,
-        selectedSchedule.name,
-        data.schedules,
-        data.employees,
-        data.weekNumber,
-        data.year,
-        data.colorLabels
-      );
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccess('Sauvegarde effectuee avec succes');
-        await loadSavedSchedules();
-      }
-    } catch (error) {
-      console.error("Error quick saving:", error);
-      setError("Erreur lors de la sauvegarde rapide");
-    } finally {
-      setLoading(false);
-    }
+  const handleForceSave = () => {
+    if (!conflict) return;
+    const { schedule, name } = conflict;
+    setConflict(null);
+    performSave(name, schedule, true);
   };
 
   const handleRestore = (schedule: SavedSchedule) => {
@@ -213,9 +314,36 @@ const FileMenu: React.FC<FileMenuProps> = ({
       createdAt: Timestamp.now(),
     };
     setSelectedSchedule(null);
-    onRestore(pseudoSchedule);
+    onRestore(pseudoSchedule, autoSave.weeks);
     setShowRestoreDialog(false);
     setSuccess('Brouillon auto-sauvegarde restaure');
+  };
+
+  const handleAcceptIncomingDraft = () => {
+    if (!incomingDraft) return;
+    const pseudoSchedule: SavedSchedule = {
+      id: '__cloud_draft__',
+      name: `Brouillon de ${incomingDraft.deviceLabel}`,
+      schedules: incomingDraft.schedules,
+      employees: incomingDraft.employees,
+      weekNumber: incomingDraft.weekNumber,
+      year: incomingDraft.year,
+      colorLabels: [],
+      createdAt: Timestamp.now(),
+    };
+    setSelectedSchedule(null);
+    onRestore(pseudoSchedule, incomingDraft.weeks);
+    if (incomingDraft.truncated) {
+      setWarnings(['Brouillon volumineux : seule la semaine affichée a été récupérée']);
+    }
+    setIncomingDraft(null);
+    onCloudDraftChecked();
+    setSuccess('Brouillon récupéré depuis l\'autre poste');
+  };
+
+  const handleIgnoreIncomingDraft = () => {
+    setIncomingDraft(null);
+    onCloudDraftChecked();
   };
 
   const handleDelete = async (schedule: SavedSchedule) => {
@@ -251,6 +379,16 @@ const FileMenu: React.FC<FileMenuProps> = ({
 
   const autoSaveData = showRestoreDialog ? loadScheduleAutoSave() : null;
 
+  const localBadge = (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 whitespace-nowrap"
+      title="Cette sauvegarde n'existe que sur ce PC : elle partira en ligne dès que possible"
+    >
+      <HardDrive className="w-3 h-3" />
+      Local - non synchronise
+    </span>
+  );
+
   return (
     <>
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-50">
@@ -261,8 +399,9 @@ const FileMenu: React.FC<FileMenuProps> = ({
               v{APP_VERSION} — {APP_RELEASE_DATE}
             </span>
             {selectedSchedule && (
-              <span className="text-sm text-gray-500 truncate">
+              <span className="text-sm text-gray-500 truncate flex items-center gap-1.5">
                 Planning actuel: <span className="font-medium text-gray-700">{selectedSchedule.name}</span>
+                {selectedSchedule.isLocal && localBadge}
               </span>
             )}
 
@@ -287,6 +426,46 @@ const FileMenu: React.FC<FileMenuProps> = ({
                 </>
               ) : null}
             </div>
+
+            {/* État du brouillon partagé entre les postes */}
+            {cloudDraftStatus !== 'off' && (
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap rounded-full px-2.5 py-1 border ${
+                  cloudDraftStatus === 'synced'
+                    ? 'text-sky-600 bg-sky-50 border-sky-200'
+                    : cloudDraftStatus === 'saving'
+                      ? 'text-gray-500 bg-gray-50 border-gray-200'
+                      : 'text-amber-600 bg-amber-50 border-amber-200'
+                }`}
+                title={
+                  cloudDraftStatus === 'synced'
+                    ? 'Brouillon disponible depuis vos autres PC'
+                    : cloudDraftStatus === 'saving'
+                      ? 'Envoi du brouillon en cours'
+                      : 'Brouillon non envoye : il reste sur ce PC'
+                }
+              >
+                {cloudDraftStatus === 'synced' ? (
+                  <><Cloud className="w-3 h-3" />Brouillon en ligne</>
+                ) : cloudDraftStatus === 'saving' ? (
+                  <><RefreshCw className="w-3 h-3 animate-spin" />Envoi...</>
+                ) : (
+                  <><CloudOff className="w-3 h-3" />Brouillon local</>
+                )}
+              </span>
+            )}
+
+            {pendingLocalCount > 0 && (
+              <button
+                onClick={async () => { const r = await runSync(); if (r.synced > 0) await loadSavedSchedules(); }}
+                disabled={syncing}
+                title="Envoyer maintenant les sauvegardes restées sur ce PC"
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+                {pendingLocalCount} a synchroniser
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -399,6 +578,86 @@ const FileMenu: React.FC<FileMenuProps> = ({
         </div>
       </div>
 
+      {/* Brouillon plus récent trouvé sur un autre poste */}
+      {incomingDraft && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
+          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
+            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+              <Laptop className="w-5 h-5 text-sky-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Brouillon plus recent disponible</h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                Un brouillon plus recent a ete laisse sur{' '}
+                <span className="font-semibold text-gray-900">{incomingDraft.deviceLabel}</span>{' '}
+                le {formatAutoSaveTime(incomingDraft.timestamp)}.
+              </p>
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg text-sm text-gray-700">
+                <div>Semaine {incomingDraft.weekNumber} - {incomingDraft.year}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {incomingDraft.employees?.length || 0} employes
+                  {incomingDraft.weeks && ` - ${Object.keys(incomingDraft.weeks).length} semaine(s)`}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Le recuperer remplacera le planning actuellement affiche sur ce PC.
+              </p>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+              <button
+                onClick={handleIgnoreIncomingDraft}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Ignorer
+              </button>
+              <button
+                onClick={handleAcceptIncomingDraft}
+                className="px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-lg hover:bg-sky-700 active:bg-sky-800 shadow-sm transition-all duration-150"
+              >
+                Recuperer le brouillon
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sauvegarde refusée : modification concurrente */}
+      {conflict && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
+          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
+            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Modifie ailleurs entre-temps</h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                La sauvegarde <span className="font-semibold text-gray-900">"{conflict.name}"</span> a ete
+                modifiee en ligne le {formatTimestamp(conflict.remoteUpdatedAt)}, depuis un autre PC ou par
+                un autre utilisateur.
+              </p>
+              <p className="text-sm text-gray-600">
+                Ecraser remplacera cette version par celle affichee ici. Pour repartir de la version en
+                ligne, annulez puis utilisez <span className="font-medium">Ouvrir</span>.
+              </p>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+              <button
+                onClick={() => setConflict(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleForceSave}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 active:bg-orange-800 shadow-sm transition-all duration-150"
+              >
+                Ecraser quand meme
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSaveAsDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
           <div className="bg-white rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col animate-scaleIn">
@@ -449,12 +708,15 @@ const FileMenu: React.FC<FileMenuProps> = ({
                         disabled={loading}
                         className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition-all duration-150 disabled:opacity-50"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-900">{schedule.name}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-gray-900 truncate">{schedule.name}</span>
                           <span className="text-xs text-orange-600 font-medium">Ecraser</span>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Semaine {schedule.weekNumber} - {schedule.year}
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-gray-500">
+                            Semaine {schedule.weekNumber} - {schedule.year}
+                          </span>
+                          {schedule.isLocal && localBadge}
                         </div>
                       </button>
                     ))}
@@ -571,12 +833,24 @@ const FileMenu: React.FC<FileMenuProps> = ({
                           onClick={() => handleRestore(schedule)}
                           className="flex-1 p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150"
                         >
-                          <div className="font-medium text-gray-900">{schedule.name}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-gray-900 truncate">{schedule.name}</span>
+                            {schedule.isLocal ? localBadge : (
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5 whitespace-nowrap"
+                                title="Disponible depuis tous vos PC"
+                              >
+                                <Cloud className="w-3 h-3" />
+                                En ligne
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500 mt-1">
                             Semaine {schedule.weekNumber} - {schedule.year}
                           </div>
                           <div className="text-xs text-gray-400 mt-1">
                             {schedule.employees?.length || 0} employes
+                            {schedule.updatedAt && ` - modifie le ${formatTimestamp(schedule.updatedAt)}`}
                           </div>
                         </button>
                         <button

@@ -56,4 +56,8 @@ export interface SavedSchedule {
   colorLabels: ColorLabel[];
   createdAt: Timestamp;
   updatedAt?: Timestamp;
+  /** Sauvegarde encore stockée sur ce seul PC (non envoyée en ligne) */
+  isLocal?: boolean;
+  /** Identifiant Firestore réservé pour cette sauvegarde locale (évite les doublons à la synchro) */
+  remoteId?: string;
 }
