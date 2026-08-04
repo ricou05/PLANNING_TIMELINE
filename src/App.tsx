@@ -18,6 +18,7 @@ import { useManagedColors } from './hooks/useManagedColors';
 import { useShiftTemplates } from './hooks/useShiftTemplates';
 import { useScheduleAutoSave, loadScheduleAutoSave } from './hooks/useScheduleAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
+import { useAuth } from './hooks/useAuth';
 import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -110,7 +111,21 @@ function App() {
     () => ({ ...weeksRef.current, [weekKey]: schedules }),
     [weekKey, schedules]
   );
-  const scheduleAutoSave = useScheduleAutoSave(schedules, employees, weekNumber, year, allWeeks);
+
+  // Brouillon partagé entre postes : on n'écrit dans le cloud qu'une fois
+  // vérifié qu'aucun brouillon plus récent n'attend sur un autre PC, sinon
+  // on l'écraserait avant même de l'avoir proposé.
+  const { user } = useAuth();
+  const [cloudDraftChecked, setCloudDraftChecked] = useState(false);
+  const handleCloudDraftChecked = useCallback(() => setCloudDraftChecked(true), []);
+  const scheduleAutoSave = useScheduleAutoSave(
+    schedules,
+    employees,
+    weekNumber,
+    year,
+    allWeeks,
+    cloudDraftChecked ? user?.uid ?? null : null
+  );
 
   // Change de semaine affichée : mémorise la semaine courante puis charge la nouvelle
   const switchToWeek = useCallback((newWeek: number, newYear: number) => {
@@ -576,9 +591,12 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <FileMenu
-        onRestore={(savedSchedule: SavedSchedule) => {
-          // Mémorise la semaine affichée puis charge la sauvegarde sur sa semaine
-          weeksRef.current = { ...weeksRef.current, [weekKey]: schedules };
+        onRestore={(savedSchedule: SavedSchedule, restoredWeeks?: Record<string, Record<string, Schedule>>) => {
+          // Un brouillon complet remplace toutes les semaines ouvertes ; une
+          // sauvegarde simple ne touche que sa propre semaine.
+          weeksRef.current = restoredWeeks
+            ? { ...restoredWeeks }
+            : { ...weeksRef.current, [weekKey]: schedules };
           resetSchedules(savedSchedule.schedules);
           setEmployees(savedSchedule.employees);
           setWeekNumber(savedSchedule.weekNumber);
@@ -594,6 +612,8 @@ function App() {
         onNewSchedule={handleNewSchedule}
         autoSaveTimestamp={scheduleAutoSave.lastAutoSave}
         showAutoSaveIndicator={scheduleAutoSave.showIndicator}
+        cloudDraftStatus={scheduleAutoSave.cloudStatus}
+        onCloudDraftChecked={handleCloudDraftChecked}
       />
 
       <main className="pt-20 max-w-[95%] mx-auto pb-8 animate-fadeIn">

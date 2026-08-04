@@ -1,5 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, enableIndexedDbPersistence } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -13,21 +19,19 @@ const firebaseConfig = {
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// Persistance hors ligne : cache IndexedDB avec gestion multi-onglets.
+// Remplace enableIndexedDbPersistence(), déprécié et limité à un seul
+// onglet à la fois (le second onglet perdait la persistance).
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
 
 // Authentification (emails de réinitialisation, etc. envoyés en français)
 export const auth = getAuth(app);
 auth.languageCode = 'fr';
-
-// Activer la persistance hors ligne
-enableIndexedDbPersistence(db).catch((err) => {
-  console.warn('Erreur lors de l\'activation de la persistance:', err);
-  if (err.code === 'failed-precondition') {
-    console.warn('La persistance ne peut être activée que dans un seul onglet à la fois');
-  } else if (err.code === 'unimplemented') {
-    console.warn('Le navigateur ne supporte pas la persistance');
-  }
-});
 
 // Test de connexion avec gestion améliorée des erreurs
 export const testConnection = async (): Promise<{ online: boolean; error?: string }> => {
@@ -35,14 +39,14 @@ export const testConnection = async (): Promise<{ online: boolean; error?: strin
     // Essayer de créer la collection si elle n'existe pas
     const schedulesRef = collection(db, 'schedules');
     await getDocs(schedulesRef);
-    
+
     console.log('Connexion Firebase réussie');
     return { online: true };
   } catch (error) {
     console.warn('Erreur de connexion Firebase - passage en mode hors ligne:', error);
-    return { 
-      online: false, 
-      error: 'Mode hors ligne activé - Les données seront synchronisées automatiquement'
+    return {
+      online: false,
+      error: 'Mode hors ligne : les sauvegardes restent sur ce PC et seront envoyées en ligne au retour de la connexion'
     };
   }
 };

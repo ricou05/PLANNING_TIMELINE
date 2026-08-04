@@ -55,6 +55,12 @@ C'est cette étape qui ferme réellement l'accès public à la base.
 > Tant que cette étape n'est pas faite, l'ancienne règle `allow read, write: if true`
 > reste active et **n'importe qui sur Internet peut lire/modifier/supprimer les données**.
 
+> **À refaire après la mise à jour « travail multi-PC »** : les règles contiennent
+> désormais un bloc `match /drafts/{uid}` pour le brouillon partagé entre vos
+> ordinateurs. Sans republication, le brouillon en ligne sera refusé (badge
+> « Brouillon local » en permanence) — les sauvegardes manuelles, elles,
+> continuent de fonctionner.
+
 ## Étape 3 — Créer votre compte admin
 
 1. Ouvrir l'application (une fois la nouvelle version déployée)

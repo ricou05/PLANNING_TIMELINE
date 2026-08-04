@@ -25,6 +25,10 @@ export const updateLocalSchedule = async (id: string, updatedSchedule: SavedSche
     const index = schedules.findIndex(s => s.id === id);
     if (index !== -1) {
       updatedSchedule.updatedAt = Timestamp.now();
+      // On conserve la date de création et l'id Firestore réservé d'origine :
+      // l'appelant ne les connaît pas toujours.
+      updatedSchedule.createdAt = schedules[index].createdAt;
+      updatedSchedule.remoteId = updatedSchedule.remoteId || schedules[index].remoteId;
       schedules[index] = updatedSchedule;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules));
     }
@@ -53,6 +57,9 @@ export const getLocalSchedules = async (): Promise<SavedSchedule[]> => {
     const schedules = JSON.parse(stored) as StoredSchedule[];
     return schedules.map((schedule) => ({
       ...schedule,
+      // Marqueur affiché dans la liste « Ouvrir » : ces sauvegardes ne sont
+      // visibles que depuis ce PC tant qu'elles n'ont pas été synchronisées.
+      isLocal: true,
       createdAt: createTimestamp(schedule.createdAt),
       updatedAt: createTimestamp(schedule.updatedAt || schedule.createdAt)
     }));
