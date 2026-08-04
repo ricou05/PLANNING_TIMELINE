@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, X, Copy, ClipboardPaste, AlertTriangle, CalendarOff } from 'lucide-react';
+import { Download, X, Copy, ClipboardPaste, AlertTriangle, CalendarOff, GripVertical } from 'lucide-react';
 import { Employee, Schedule, ManagedColor, ShiftTemplate, AbsencePeriod } from '../types';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
@@ -9,7 +9,17 @@ import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
 import AbsencePeriodChooser from './AbsencePeriodChooser';
 import { EditableShift } from './WeeklyVisualView';
-import { isPlanningDrag } from '../utils/planningDrag';
+import {
+  isPlanningDrag,
+  isDayDrag,
+  setDayDragData,
+  getDayDragSource,
+  transferModeOf,
+  hasDayContent,
+  DayRef,
+  TransferMode,
+  DAY_DRAG_HINT,
+} from '../utils/planningDrag';
 import { REST_DAY_STRIPES } from '../utils/cellStyles';
 import { exportGridToPDF, ExportDisplaySettings } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
@@ -35,6 +45,8 @@ interface WeeklyGridViewProps {
   onManageTemplatesClick: () => void;
   onApplyTemplate: (employeeId: number, day: string, template: ShiftTemplate, fallbackColor: string) => void;
   onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
+  /** Déplace (ou copie) toute une journée d'un salarié vers un autre */
+  onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
   /** Réglages d'affichage en cours (menu Paramètres), reportés sur l'export PDF/PNG */
   displaySettings?: ExportDisplaySettings;
 }
@@ -131,6 +143,11 @@ interface GridDayCellProps {
   onCellDrop: (e: React.DragEvent) => void;
   pendingAbsenceLabel: string | null;
   onResolvePendingAbsence: (period: AbsencePeriod | null) => void;
+  /** La journée porte quelque chose : elle peut être glissée vers un autre salarié */
+  canDragDay: boolean;
+  isDayDragSource: boolean;
+  onDayDragStart: (e: React.DragEvent) => void;
+  onDayDragEnd: () => void;
 }
 
 const GridDayCell: React.FC<GridDayCellProps> = ({
@@ -148,6 +165,10 @@ const GridDayCell: React.FC<GridDayCellProps> = ({
   onCellDrop,
   pendingAbsenceLabel,
   onResolvePendingAbsence,
+  canDragDay,
+  isDayDragSource,
+  onDayDragStart,
+  onDayDragEnd,
 }) => {
   const [editing, setEditing] = useState(false);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -171,17 +192,31 @@ const GridDayCell: React.FC<GridDayCellProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editing]);
 
+  // Journée glissable vers un autre salarié (désactivé pendant l'édition en place,
+  // sinon les champs horaires ne seraient plus sélectionnables)
+  const isDraggableDay = canDragDay && !editing;
+  const dayDragProps = isDraggableDay
+    ? { draggable: true, onDragStart: onDayDragStart, onDragEnd: onDayDragEnd }
+    : {};
+  const dayDragClass = isDayDragSource ? 'opacity-40' : '';
+  const dayGrip = isDraggableDay ? (
+    <GripVertical className="absolute top-0 left-0 w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-70 pointer-events-none transition-opacity" />
+  ) : null;
+
   // Jour de repos : croix diagonale sur toute la cellule, comme sur le planning Excel
   if (schedule?.isRestDay) {
     return (
       <div
-        className={`relative flex flex-col h-full min-h-[52px] group ${
+        className={`relative flex flex-col h-full min-h-[52px] group ${dayDragClass} ${
           isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
         }`}
+        title={isDraggableDay ? DAY_DRAG_HINT : undefined}
+        {...dayDragProps}
         onDragOver={onCellDragOver}
         onDragLeave={onCellDragLeave}
         onDrop={onCellDrop}
       >
+        {dayGrip}
         <DiagonalCross />
         <div className="flex-1 flex items-center justify-center">
           <span className="text-gray-500 text-sm">-</span>
@@ -204,13 +239,16 @@ const GridDayCell: React.FC<GridDayCellProps> = ({
   if (schedule?.absence) {
     return (
       <div
-        className={`relative flex items-center justify-center h-full min-h-[52px] group bg-amber-50 ${
+        className={`relative flex items-center justify-center h-full min-h-[52px] group bg-amber-50 ${dayDragClass} ${
           isDragOver ? 'ring-2 ring-inset ring-blue-400' : ''
         }`}
+        title={isDraggableDay ? DAY_DRAG_HINT : undefined}
+        {...dayDragProps}
         onDragOver={onCellDragOver}
         onDragLeave={onCellDragLeave}
         onDrop={onCellDrop}
       >
+        {dayGrip}
         <DiagonalCross />
         <div className="flex items-center gap-1">
           <CalendarOff className="w-4 h-4 text-amber-600" />
@@ -311,15 +349,17 @@ const GridDayCell: React.FC<GridDayCellProps> = ({
   // Affichage : deux demi-journées empilées, remplissant toute la cellule (clic pour éditer)
   return (
     <div
-      className={`relative flex flex-col h-full min-h-[52px] cursor-pointer hover:brightness-95 transition-all ${
+      className={`relative flex flex-col h-full min-h-[52px] group cursor-pointer hover:brightness-95 transition-all ${dayDragClass} ${
         isDragOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''
       }`}
       onClick={() => setEditing(true)}
-      title="Cliquer pour modifier"
+      title={isDraggableDay ? `Cliquer pour modifier — ${DAY_DRAG_HINT}` : 'Cliquer pour modifier'}
+      {...dayDragProps}
       onDragOver={onCellDragOver}
       onDragLeave={onCellDragLeave}
       onDrop={onCellDrop}
     >
+      {dayGrip}
       <HalfDayBlock
         start={schedule?.morningStart || ''}
         end={schedule?.morningEnd || ''}
@@ -359,12 +399,14 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
   onManageTemplatesClick,
   onApplyTemplate,
   onSetAbsence,
+  onTransferDay,
   displaySettings,
 }) => {
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState('bleu');
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+  const [draggedDay, setDraggedDay] = useState<string | null>(null);
   const [pendingAbsence, setPendingAbsence] = useState<PendingAbsence | null>(null);
 
   const handleExportPDF = async (options: PDFExportOptions) => {
@@ -379,14 +421,21 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
     }
   };
 
-  // Accepte les glisser-déposer de repos, de modèles de créneaux et d'absences
+  // Accepte les glisser-déposer de repos, de modèles de créneaux, d'absences et
+  // de journées transférées depuis un autre salarié
   const handleCellDragOver = (e: React.DragEvent, cellKey: string) => {
     if (isPlanningDrag(e)) {
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = 'copy';
+      e.dataTransfer.dropEffect = isDayDrag(e) ? transferModeOf(e) : 'copy';
       setDragOverCell(cellKey);
     }
+  };
+
+  const handleDayDragStart = (e: React.DragEvent, employeeId: number, day: string) => {
+    e.stopPropagation();
+    setDayDragData(e, { employeeId, day });
+    setDraggedDay(`${employeeId}-${day}`);
   };
 
   const handleCellDragLeave = (e: React.DragEvent) => {
@@ -400,6 +449,13 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragOverCell(null);
+
+    const daySource = getDayDragSource(e);
+    if (daySource) {
+      setDraggedDay(null);
+      onTransferDay(daySource, { employeeId, day }, transferModeOf(e));
+      return;
+    }
 
     const templateData = e.dataTransfer.getData('application/shift-template');
     const absenceLabel = e.dataTransfer.getData('application/absence');
@@ -549,6 +605,10 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                           onCellDrop={(e) => handleCellDrop(e, employee.id, day)}
                           pendingAbsenceLabel={pendingAbsence?.cellKey === cellKey ? pendingAbsence.label : null}
                           onResolvePendingAbsence={resolvePendingAbsence}
+                          canDragDay={hasDayContent(schedules[cellKey])}
+                          isDayDragSource={draggedDay === cellKey}
+                          onDayDragStart={(e) => handleDayDragStart(e, employee.id, day)}
+                          onDayDragEnd={() => setDraggedDay(null)}
                         />
                       </td>
                     );
