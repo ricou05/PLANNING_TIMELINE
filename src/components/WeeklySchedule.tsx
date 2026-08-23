@@ -434,9 +434,9 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="px-4 flex justify-between items-start gap-4 flex-wrap">
-        <div className="flex flex-col gap-2">
+    <div className="space-y-3">
+      <div className="px-4 flex justify-between items-center gap-x-5 gap-y-2 flex-wrap">
+        <div className="flex items-center gap-x-5 gap-y-2 flex-wrap flex-1 min-w-0">
           <ColorPicker
             selectedColor={selectedColor}
             onColorChange={setSelectedColor}

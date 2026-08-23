@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Clock, Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus } from 'lucide-react';
+import { Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import WeeklyGridView from './components/WeeklyGridView';
 import WeeklyVisualView from './components/WeeklyVisualView';
@@ -22,6 +22,10 @@ import { useAuth } from './hooks/useAuth';
 import { downloadCSV } from './utils/csvExport';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const WEEK_VIEWS = ['grid', 'weekly', 'visual'] as const;
+
+/** Quantième seul (« 24 ») : le mois est déjà donné par le sélecteur de semaine. */
+const dayOfMonth = (date: string): string => date.split('/')[0] ?? date;
 
 const EMPTY_DAY: Schedule = {
   morningStart: '',
@@ -614,100 +618,163 @@ function App() {
         showAutoSaveIndicator={scheduleAutoSave.showIndicator}
         cloudDraftStatus={scheduleAutoSave.cloudStatus}
         onCloudDraftChecked={handleCloudDraftChecked}
-      />
-
-      <main className="pt-20 max-w-[95%] mx-auto pb-8 animate-fadeIn">
-        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label htmlFor="year" className="text-sm font-medium text-gray-700">
-                Annee
-              </label>
-              <input
-                id="year"
-                type="number"
-                min="1970"
-                max="2100"
-                value={year}
-                onChange={handleYearChange}
-                className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="weekNumber" className="text-sm font-medium text-gray-700">
-                Semaine N
-              </label>
-              <button
-                onClick={goToPreviousWeek}
-                title="Semaine précédente"
-                className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <input
-                id="weekNumber"
-                type="number"
-                min="1"
-                max="53"
-                value={weekNumber}
-                onChange={handleWeekChange}
-                className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
-              />
-              <button
-                onClick={goToNextWeek}
-                title="Semaine suivante"
-                className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={duplicatePreviousWeek}
-                title="Reprendre le planning de la semaine précédente"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
-              >
-                <CopyPlus className="w-3.5 h-3.5" />
-                Reprendre S-1
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="employeeCount" className="text-sm font-medium text-gray-700">
-                Nombre d'employes:
-              </label>
-              <input
-                id="employeeCount"
-                type="number"
-                min="1"
-                max="100"
-                value={employeeCount}
-                onChange={handleEmployeeCountChange}
-                className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
-              />
-              <button
-                onClick={handleAddEmployee}
-                title="Ajouter un employe"
-                className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all duration-150"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+      >
+        {/* Contrôles de planning logés dans la barre fixe : ils occupaient
+            auparavant un bandeau à eux seuls sous l'en-tête. */}
+        <div className="flex items-center gap-1.5 flex-none">
+          <button
+            onClick={goToPreviousWeek}
+            title="Semaine précédente"
+            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="flex items-center rounded-lg border border-gray-300 bg-white shadow-sm overflow-hidden">
+            <label htmlFor="weekNumber" className="pl-2 pr-1 text-xs font-medium text-gray-500 select-none">
+              S
+            </label>
+            <input
+              id="weekNumber"
+              type="number"
+              min="1"
+              max="53"
+              value={weekNumber}
+              onChange={handleWeekChange}
+              title="Numéro de semaine"
+              className="w-11 py-1 text-sm tabular-nums border-0 focus:ring-0 focus:outline-none"
+            />
+            <input
+              id="year"
+              type="number"
+              min="1970"
+              max="2100"
+              value={year}
+              onChange={handleYearChange}
+              title="Année"
+              className="w-16 py-1 text-sm tabular-nums text-gray-500 border-0 border-l border-gray-200 focus:ring-0 focus:outline-none"
+            />
           </div>
+          <button
+            onClick={goToNextWeek}
+            title="Semaine suivante"
+            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={duplicatePreviousWeek}
+            title="Reprendre le planning de la semaine précédente"
+            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150"
+          >
+            <CopyPlus className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-gray-200 flex-none" aria-hidden="true" />
+
+        <div className="flex items-center gap-1.5 flex-none">
+          <label htmlFor="employeeCount" className="text-xs font-medium text-gray-500 whitespace-nowrap">
+            Salariés
+          </label>
+          <input
+            id="employeeCount"
+            type="number"
+            min="1"
+            max="100"
+            value={employeeCount}
+            onChange={handleEmployeeCountChange}
+            title="Nombre de salariés"
+            className="w-14 px-2 py-1 text-sm tabular-nums border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+          />
+          <button
+            onClick={handleAddEmployee}
+            title="Ajouter un salarié"
+            className="flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all duration-150"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-gray-200 flex-none" aria-hidden="true" />
+
+        <div className="flex items-center gap-1.5 flex-none">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            title="Annuler (Ctrl+Z)"
+            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            title="Rétablir (Ctrl+Y)"
+            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+      </FileMenu>
+
+      <main className="pt-14 max-w-[95%] mx-auto pb-8 animate-fadeIn">
+        {/* Sélecteurs segmentés : une seule ligne pour les vues, les jours et
+            les exports, là où neuf boutons occupaient deux lignes de texte. */}
+        <div className="flex items-center gap-3 flex-wrap mb-3">
+          <div className="inline-flex rounded-lg border border-gray-300 shadow-sm overflow-hidden bg-white">
+            {WEEK_VIEWS.map((view, i) => (
+              <button
+                key={view}
+                onClick={() => setActiveTab(view)}
+                title={`Vue Hebdomadaire ${i + 1}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                  i > 0 ? 'border-l border-gray-300' : ''
+                } ${
+                  activeTab === view
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {view === 'visual' ? <LayoutGrid className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+                Hebdo {i + 1}
+              </button>
+            ))}
+          </div>
+
+          <div className="inline-flex rounded-lg border border-gray-300 shadow-sm overflow-hidden bg-white">
+            {DAYS.map((day, index) => (
+              <button
+                key={day}
+                onClick={() => setActiveTab(day)}
+                title={`${day} ${formatDate(weekDates[index])}`}
+                className={`flex items-baseline gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                  index > 0 ? 'border-l border-gray-300' : ''
+                } ${
+                  activeTab === day
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <span>{day.slice(0, 3)}</span>
+                <span className="text-[11px] tabular-nums opacity-70">{dayOfMonth(formatDate(weekDates[index]))}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1" />
 
           <div className="flex items-center gap-2">
             <button
-              onClick={undo}
-              disabled={!canUndo}
-              title="Annuler (Ctrl+Z)"
-              className="flex items-center justify-center w-9 h-9 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => setActiveTab('excel')}
+              title="Vue Export Excel"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-colors duration-150 ${
+                activeTab === 'excel'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
             >
-              <Undo2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo}
-              title="Rétablir (Ctrl+Y)"
-              className="flex items-center justify-center w-9 h-9 bg-white text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Redo2 className="w-5 h-5" />
+              <FileSpreadsheet className="h-4 w-4" />
+              Excel
             </button>
             <CSVImport onImport={handleCSVImport} existingEmployees={employees} managedColors={managedColors} />
             <CSVExportButton
@@ -715,78 +782,6 @@ function App() {
             />
             <DisplaySettingsMenu settings={displaySettings} onChange={setDisplaySettings} />
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          <button
-            onClick={() => {
-              if (activeTab === 'grid') setActiveTab('weekly');
-              else if (activeTab === 'weekly') setActiveTab('visual');
-              else setActiveTab('grid');
-            }}
-            title={
-              activeTab === 'grid'
-                ? 'Basculer vers Vue Hebdomadaire 2 (édition)'
-                : activeTab === 'weekly'
-                ? 'Basculer vers Vue Hebdomadaire 3 (visuelle)'
-                : activeTab === 'visual'
-                ? 'Basculer vers Vue Hebdomadaire 1 (planning)'
-                : 'Afficher la vue hebdomadaire'
-            }
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'grid' || activeTab === 'weekly' || activeTab === 'visual'
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-          >
-            {activeTab === 'visual' ? (
-              <LayoutGrid className="h-4 w-4" />
-            ) : (
-              <Calendar className="h-4 w-4" />
-            )}
-            {activeTab === 'grid'
-              ? 'Vue Hebdomadaire 1'
-              : activeTab === 'weekly'
-              ? 'Vue Hebdomadaire 2'
-              : activeTab === 'visual'
-              ? 'Vue Hebdomadaire 3'
-              : 'Vue Hebdomadaire'}
-            {(activeTab === 'grid' || activeTab === 'weekly' || activeTab === 'visual') && (
-              <span className="ml-1 text-xs bg-white/25 rounded px-1">
-                {activeTab === 'grid' ? '1→2' : activeTab === 'weekly' ? '2→3' : '3→1'}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('excel')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-              ${activeTab === 'excel'
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Export Excel
-          </button>
-
-          {DAYS.map((day, index) => (
-            <button
-              key={day}
-              onClick={() => setActiveTab(day)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 shadow-sm
-                ${activeTab === day
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
-            >
-              <Clock className="h-4 w-4" />
-              <div className="flex flex-col items-start">
-                <span>{day}</span>
-                <span className="text-xs opacity-75">{formatDate(weekDates[index])}</span>
-              </div>
-            </button>
-          ))}
         </div>
 
         <div

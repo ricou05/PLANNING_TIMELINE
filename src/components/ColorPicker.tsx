@@ -10,6 +10,9 @@ interface ColorPickerProps {
   showRestDayButton?: boolean;
 }
 
+// Les pastilles tiennent sur une seule ligne : le libellé de chaque rayon vit
+// dans l'infobulle, et seul celui du rayon sélectionné reste écrit — c'est la
+// seule information dont on a besoin en permanence (« avec quoi je peins ? »).
 const ColorPicker: React.FC<ColorPickerProps> = ({
   selectedColor,
   onColorChange,
@@ -22,49 +25,54 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const selected = managedColors.find((c) => c.id === selectedColor);
+
   return (
-    <div className="flex items-start gap-4 overflow-visible">
-      <span className="text-sm font-medium text-gray-700 mt-2">Couleur:</span>
-      <div className="flex flex-wrap gap-4 p-1 overflow-visible">
+    <div className="flex items-center gap-2" title="Rayon appliqué aux créneaux saisis">
+      <div className="flex items-center gap-1.5">
         {managedColors.map((color) => (
-          <div key={color.id} className="flex flex-col items-center gap-1">
-            <button
-              onClick={() => onColorChange(color.id)}
-              className={`w-8 h-8 rounded-full border-2 transition-all duration-150 ${
-                selectedColor === color.id
-                  ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                  : 'hover:scale-105'
-              }`}
-              style={{
-                backgroundColor: color.hex,
-                borderColor: color.hex,
-              }}
-              title={color.label}
-            />
-            <span
-              className="text-xs px-1 py-0.5 text-gray-600 text-center whitespace-nowrap"
-            >
-              {color.label}
-            </span>
-          </div>
+          <button
+            key={color.id}
+            onClick={() => onColorChange(color.id)}
+            className={`w-7 h-7 rounded-full border-2 transition-all duration-150 ${
+              selectedColor === color.id
+                ? 'ring-2 ring-offset-1 ring-blue-500'
+                : 'hover:scale-110'
+            }`}
+            style={{ backgroundColor: color.hex, borderColor: color.hex }}
+            title={color.label}
+            aria-label={color.label}
+            aria-pressed={selectedColor === color.id}
+          />
         ))}
       </div>
+
+      {selected && (
+        <span
+          className="text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[4rem]"
+          title="Rayon actuellement sélectionné"
+        >
+          {selected.label}
+        </span>
+      )}
+
       <button
         onClick={onManageClick}
-        className="mt-1 p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
         title="Gerer les couleurs"
       >
-        <Settings className="w-5 h-5" />
+        <Settings className="w-4 h-4" />
       </button>
+
       {showRestDayButton && (
         <div
           draggable
           onDragStart={handleRestDayDragStart}
-          className="mt-0.5 flex items-center gap-1.5 cursor-grab active:cursor-grabbing px-3 py-1.5 bg-gray-100 border-2 border-dashed border-gray-400 rounded-lg hover:bg-gray-200 hover:border-gray-500 transition-colors select-none"
+          className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing px-2.5 py-1 bg-gray-100 border-2 border-dashed border-gray-400 rounded-lg hover:bg-gray-200 hover:border-gray-500 transition-colors select-none"
           title="Glisser-déposer sur une journée pour marquer un jour de repos"
         >
-          <X className="w-4 h-4 text-red-500" />
-          <span className="text-sm font-semibold text-gray-600">Repos</span>
+          <X className="w-3.5 h-3.5 text-red-500" />
+          <span className="text-xs font-semibold text-gray-600">Repos</span>
         </div>
       )}
     </div>

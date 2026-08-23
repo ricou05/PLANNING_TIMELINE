@@ -485,9 +485,9 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="px-4 pt-4 flex justify-between items-start gap-4 flex-wrap">
-        <div className="flex flex-col gap-2">
+    <div className="space-y-3">
+      <div className="px-4 pt-2 flex justify-between items-center gap-x-5 gap-y-2 flex-wrap">
+        <div className="flex items-center gap-x-5 gap-y-2 flex-wrap flex-1 min-w-0">
           <ColorPicker
             selectedColor={selectedColor}
             onColorChange={setSelectedColor}
@@ -505,10 +505,10 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
         <button
           onClick={() => setShowPDFModal(true)}
           disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+          className="flex-none flex items-center gap-2 px-3 py-1.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
         >
           <Download className="w-5 h-5" />
-          <span>{exporting ? 'Export en cours…' : 'Exporter PDF / PNG'}</span>
+          <span>{exporting ? 'Export…' : 'PDF / PNG'}</span>
         </button>
 
         {showPDFModal && (
