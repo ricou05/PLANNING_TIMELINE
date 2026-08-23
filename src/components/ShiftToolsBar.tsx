@@ -36,7 +36,7 @@ const ShiftToolsBar: React.FC<ShiftToolsBarProps> = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-gray-700">Modèles :</span>
         {templates.map(t => {
@@ -56,8 +56,7 @@ const ShiftToolsBar: React.FC<ShiftToolsBarProps> = ({
                   style={{ backgroundColor: mc.hex }}
                 />
               )}
-              <span className="text-xs font-semibold text-gray-700">{t.label}</span>
-              <span className="text-[10px] text-gray-400 whitespace-nowrap">{templateSummary(t)}</span>
+              <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">{t.label}</span>
             </div>
           );
         })}

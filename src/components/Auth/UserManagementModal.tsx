@@ -19,6 +19,8 @@ import {
   normalizeEmail,
 } from '../../utils/firebase';
 import type { AllowedUser, UserRole } from '../../utils/firebase';
+import { isFirebaseError } from '../../utils/firebase';
+import FirestoreAccessHelp from './FirestoreAccessHelp';
 import { useAuth } from '../../hooks/useAuth';
 
 interface UserManagementModalProps {
@@ -27,6 +29,9 @@ interface UserManagementModalProps {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const isPermissionDenied = (error: unknown): boolean =>
+  isFirebaseError(error) && error.code === 'permission-denied';
 
 const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
@@ -38,6 +43,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('user');
   const [userToDelete, setUserToDelete] = useState<AllowedUser | null>(null);
+  // Un refus des règles de sécurité n'est pas une panne passagère : il appelle
+  // le panneau de diagnostic plutôt qu'un simple message rouge.
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   const currentEmail = user?.email ? normalizeEmail(user.email) : '';
 
@@ -45,10 +53,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
     try {
       setLoading(true);
       setError(null);
+      setPermissionDenied(false);
       setUsers(await listAllowedUsers());
     } catch (err) {
       console.error('Erreur lors du chargement des utilisateurs:', err);
       setError(`Impossible de charger la liste des utilisateurs. ${describeFirestoreError(err)}`);
+      setPermissionDenied(isPermissionDenied(err));
     } finally {
       setLoading(false);
     }
@@ -60,6 +70,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
       setError(null);
       setNewEmail('');
       setNewRole('user');
+      setPermissionDenied(false);
       loadUsers();
     }
   }, [isOpen, loadUsers]);
@@ -94,6 +105,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
     } catch (err) {
       console.error("Erreur lors de l'ajout de l'utilisateur:", err);
       setError(`Impossible d'ajouter cet utilisateur. ${describeFirestoreError(err)}`);
+      setPermissionDenied(isPermissionDenied(err));
     } finally {
       setSaving(false);
     }
@@ -114,6 +126,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
       setError(`Impossible de révoquer cet utilisateur. ${describeFirestoreError(err)}`);
+      setPermissionDenied(isPermissionDenied(err));
     } finally {
       setSaving(false);
       setUserToDelete(null);
@@ -142,6 +155,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
+          {permissionDenied && <FirestoreAccessHelp />}
           {success && (
             <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2 animate-slideIn">
               <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />

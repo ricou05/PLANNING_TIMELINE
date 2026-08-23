@@ -5,7 +5,7 @@ export { syncLocalSchedules, countLocalSchedules } from './sync';
 export type { SyncResult } from './sync';
 export { saveCloudDraft, loadCloudDraft, clearCloudDraft } from './drafts';
 export type { CloudDraft } from './drafts';
-export { handleFirebaseError } from './error-handling';
+export { handleFirebaseError, isFirebaseError } from './error-handling';
 export {
   BOOTSTRAP_ADMIN_EMAIL,
   normalizeEmail,
@@ -25,5 +25,15 @@ export {
   removeAllowedUser,
   ensureBootstrapAdminDoc,
   describeFirestoreError,
+  diagnoseUserAccess,
+  FIRESTORE_RULES,
+  FIRESTORE_RULES_CONSOLE_URL,
 } from './users';
-export type { AllowedUser, AllowedUserLookup, UserRole, AddUserResult } from './users';
+export type {
+  AllowedUser,
+  AllowedUserLookup,
+  UserRole,
+  AddUserResult,
+  AccessDiagnostic,
+  AccessProbe,
+} from './users';

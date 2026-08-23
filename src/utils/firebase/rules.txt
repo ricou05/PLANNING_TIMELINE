@@ -17,19 +17,29 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email != null;
     }
 
+    // Email du compte connecté, TOUJOURS en minuscules. L'application
+    // normalise de son côté (normalizeEmail) : l'identifiant des documents
+    // allowedUsers et la comparaison avec l'admin principal sont en
+    // minuscules. Comparer ici le jeton brut créait un décalage — un compte
+    // dont le fournisseur renvoie « Eric.Isola@gmail.com » était vu comme
+    // admin par l'application et refusé par ces règles.
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
     function isBootstrapAdmin() {
-      return isSignedIn() && request.auth.token.email == 'eric.isola@gmail.com';
+      return isSignedIn() && userEmail() == 'eric.isola@gmail.com';
     }
 
     function allowedUserDoc() {
-      return get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
+      return get(/databases/$(database)/documents/allowedUsers/$(userEmail()));
     }
 
     // Autorisé = admin principal OU email présent dans la liste blanche
     function isAllowed() {
       return isSignedIn() && (
         isBootstrapAdmin() ||
-        exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email))
+        exists(/databases/$(database)/documents/allowedUsers/$(userEmail()))
       );
     }
 
@@ -38,7 +48,7 @@ service cloud.firestore {
       return isSignedIn() && (
         isBootstrapAdmin() ||
         (
-          exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)) &&
+          exists(/databases/$(database)/documents/allowedUsers/$(userEmail())) &&
           allowedUserDoc().data.role == 'admin'
         )
       );
@@ -87,7 +97,7 @@ service cloud.firestore {
     match /allowedUsers/{email} {
       // Chacun peut lire sa propre fiche (vérification d'autorisation au
       // login) ; seuls les admins voient la liste complète.
-      allow get: if isSignedIn() && (request.auth.token.email == email || isAdmin());
+      allow get: if isSignedIn() && (userEmail() == email || isAdmin());
       allow list: if isAdmin();
 
       // Seuls les admins gèrent la liste ; données minimales validées.

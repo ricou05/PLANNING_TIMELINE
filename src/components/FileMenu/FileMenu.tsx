@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop, ChevronDown } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
 import { syncLocalSchedules } from '../../utils/firebase/sync';
@@ -11,7 +11,7 @@ import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
 import { getCurrentWeekNumber } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData, CloudDraftStatus } from '../../hooks/useScheduleAutoSave';
-import { APP_VERSION, APP_RELEASE_DATE } from '../../version';
+import { APP_VERSION } from '../../version';
 
 export interface SaveData {
   schedules: Record<string, Schedule>;
@@ -37,6 +37,12 @@ interface FileMenuProps {
    * n'écrase pas le brouillon en ligne.
    */
   onCloudDraftChecked: () => void;
+  /**
+   * Contrôles de planning (semaine, effectif, annuler/rétablir) affichés dans
+   * la barre fixe. Ils vivent dans App, qui détient leur état ; les loger ici
+   * évite un bandeau supplémentaire sous l'en-tête.
+   */
+  children?: React.ReactNode;
 }
 
 /** Écart en dessous duquel deux brouillons sont considérés équivalents. */
@@ -54,6 +60,7 @@ const formatTimestamp = (timestamp?: Timestamp | null): string => {
 };
 
 const FileMenu: React.FC<FileMenuProps> = ({
+  children,
   onRestore,
   onSave,
   onNewSchedule,
@@ -70,6 +77,8 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [showSaveAsDialog, setShowSaveAsDialog] = useState(false);
+  const [showFileMenu, setShowFileMenu] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<SavedSchedule | null>(null);
   const [scheduleToDelete, setScheduleToDelete] = useState<SavedSchedule | null>(null);
@@ -129,6 +138,18 @@ const FileMenu: React.FC<FileMenuProps> = ({
       setSyncing(false);
     }
   }, []);
+
+  // Fermeture du menu « Ouvrir » au clic extérieur
+  useEffect(() => {
+    if (!showFileMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) {
+        setShowFileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFileMenu]);
 
   // Au démarrage : on synchronise d'abord, puis on affiche la liste (elle
   // reflète ainsi le résultat de la synchronisation).
@@ -392,51 +413,38 @@ const FileMenu: React.FC<FileMenuProps> = ({
   return (
     <>
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-50">
-        <div className="max-w-[95%] mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-xl font-semibold text-gray-900 whitespace-nowrap">Planification des horaires</h1>
-            <span className="text-[10px] text-gray-400 whitespace-nowrap leading-tight self-end -ml-1 mb-0.5">
-              v{APP_VERSION} — {APP_RELEASE_DATE}
+        <div className="max-w-[95%] mx-auto px-4 py-2 flex items-center gap-3">
+          {/* Identité — réduite au strict nécessaire pour libérer la ligne */}
+          <div className="flex items-baseline gap-1.5 flex-none">
+            <h1 className="text-base font-semibold text-gray-900 whitespace-nowrap">Planning</h1>
+            <span className="text-[10px] text-gray-400 whitespace-nowrap font-mono">
+              v{APP_VERSION}
             </span>
-            {selectedSchedule && (
-              <span className="text-sm text-gray-500 truncate flex items-center gap-1.5">
-                Planning actuel: <span className="font-medium text-gray-700">{selectedSchedule.name}</span>
-                {selectedSchedule.isLocal && localBadge}
-              </span>
-            )}
+          </div>
 
-            <div
-              className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap transition-all duration-500 ${
+          {/* État de sauvegarde : une pastille, le détail dans l'infobulle */}
+          <div className="flex items-center gap-1 flex-none">
+            <span
+              title={
                 showAutoSaveIndicator
-                  ? 'opacity-100 translate-x-0 text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1'
+                  ? 'Sauvegarde auto effectuee'
                   : autoSaveTimestamp
-                    ? 'opacity-70 translate-x-0 text-gray-400 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1'
-                    : 'opacity-0 translate-x-2'
+                    ? `Sauvegarde auto : ${formatAutoSaveTime(autoSaveTimestamp)}`
+                    : 'Aucune sauvegarde auto pour le moment'
+              }
+              className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors duration-500 ${
+                showAutoSaveIndicator
+                  ? 'text-emerald-600 bg-emerald-50'
+                  : autoSaveTimestamp
+                    ? 'text-gray-400 bg-gray-50'
+                    : 'text-gray-300'
               }`}
             >
-              {showAutoSaveIndicator ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Sauvegarde auto effectuee
-                </>
-              ) : autoSaveTimestamp ? (
-                <>
-                  <Clock className="w-3 h-3" />
-                  Sauvegarde auto : {formatAutoSaveTime(autoSaveTimestamp)}
-                </>
-              ) : null}
-            </div>
+              {showAutoSaveIndicator ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+            </span>
 
-            {/* État du brouillon partagé entre les postes */}
             {cloudDraftStatus !== 'off' && (
               <span
-                className={`inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap rounded-full px-2.5 py-1 border ${
-                  cloudDraftStatus === 'synced'
-                    ? 'text-sky-600 bg-sky-50 border-sky-200'
-                    : cloudDraftStatus === 'saving'
-                      ? 'text-gray-500 bg-gray-50 border-gray-200'
-                      : 'text-amber-600 bg-amber-50 border-amber-200'
-                }`}
                 title={
                   cloudDraftStatus === 'synced'
                     ? 'Brouillon disponible depuis vos autres PC'
@@ -444,13 +452,20 @@ const FileMenu: React.FC<FileMenuProps> = ({
                       ? 'Envoi du brouillon en cours'
                       : 'Brouillon non envoye : il reste sur ce PC'
                 }
+                className={`flex items-center justify-center w-6 h-6 rounded-full ${
+                  cloudDraftStatus === 'synced'
+                    ? 'text-sky-600 bg-sky-50'
+                    : cloudDraftStatus === 'saving'
+                      ? 'text-gray-500 bg-gray-50'
+                      : 'text-amber-600 bg-amber-50'
+                }`}
               >
                 {cloudDraftStatus === 'synced' ? (
-                  <><Cloud className="w-3 h-3" />Brouillon en ligne</>
+                  <Cloud className="w-3.5 h-3.5" />
                 ) : cloudDraftStatus === 'saving' ? (
-                  <><RefreshCw className="w-3 h-3 animate-spin" />Envoi...</>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <><CloudOff className="w-3 h-3" />Brouillon local</>
+                  <CloudOff className="w-3.5 h-3.5" />
                 )}
               </span>
             )}
@@ -459,85 +474,116 @@ const FileMenu: React.FC<FileMenuProps> = ({
               <button
                 onClick={async () => { const r = await runSync(); if (r.synced > 0) await loadSavedSchedules(); }}
                 disabled={syncing}
-                title="Envoyer maintenant les sauvegardes restées sur ce PC"
-                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                title={`${pendingLocalCount} sauvegarde(s) restée(s) sur ce PC — cliquer pour les envoyer`}
+                className="flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-                {pendingLocalCount} a synchroniser
+                {pendingLocalCount}
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          {selectedSchedule && (
+            <span
+              className="hidden 2xl:flex items-center gap-1.5 text-xs text-gray-500 truncate max-w-[16rem] flex-none"
+              title={`Planning actuel : ${selectedSchedule.name}`}
+            >
+              <span className="font-medium text-gray-700 truncate">{selectedSchedule.name}</span>
+              {selectedSchedule.isLocal && localBadge}
+            </span>
+          )}
+
+          <div className="w-px h-6 bg-gray-200 flex-none" aria-hidden="true" />
+
+          {/* Contrôles de planning fournis par App (semaine, effectif, historique) */}
+          {children}
+
+          <div className="flex-1 min-w-2" />
+
+          {/* Actions fichier */}
+          <div className="flex items-center gap-1.5 flex-none">
             <button
               onClick={handleNewSchedule}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
+              title="Nouveau planning"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
             >
               <FilePlus className="w-4 h-4" />
-              Nouveau
+              <span className="hidden 2xl:inline">Nouveau</span>
             </button>
 
             <button
               onClick={handleQuickSave}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
+              title="Sauvegarder"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
             >
               <Save className="w-4 h-4" />
-              Sauvegarder
+              <span className="hidden lg:inline">Sauvegarder</span>
             </button>
 
-            <button
-              onClick={() => { loadSavedSchedules(); setShowSaveAsDialog(true); }}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
-            >
-              <Copy className="w-4 h-4" />
-              Enregistrer sous...
-            </button>
+            {/* « Ouvrir » et « Enregistrer sous… » partagent un menu : deux
+                actions peu fréquentes n'ont pas à occuper deux boutons. */}
+            <div className="relative" ref={fileMenuRef}>
+              <button
+                onClick={() => setShowFileMenu(v => !v)}
+                disabled={loading}
+                title="Ouvrir ou enregistrer sous un autre nom"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span className="hidden lg:inline">Ouvrir</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showFileMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showFileMenu && (
+                <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+                  <button
+                    onClick={() => { setShowFileMenu(false); setShowRestoreDialog(true); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                  >
+                    <FolderOpen className="w-4 h-4 text-gray-400" />
+                    Ouvrir un planning...
+                  </button>
+                  <button
+                    onClick={() => { setShowFileMenu(false); loadSavedSchedules(); setShowSaveAsDialog(true); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Copy className="w-4 h-4 text-gray-400" />
+                    Enregistrer sous...
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <button
-              onClick={() => setShowRestoreDialog(true)}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Ouvrir
-            </button>
-
-            <div className="w-px h-6 bg-gray-200 mx-1" aria-hidden="true" />
+            <div className="w-px h-6 bg-gray-200 mx-0.5" aria-hidden="true" />
 
             {isAdmin && (
               <button
                 onClick={() => setShowUserManagement(true)}
                 title="Gérer les utilisateurs autorisés"
-                className="flex items-center gap-2 px-3 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150"
+                className="flex items-center justify-center w-8 h-8 bg-white text-gray-600 rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150"
               >
                 <Users className="w-4 h-4" />
-                <span className="hidden xl:inline">Utilisateurs</span>
               </button>
             )}
 
             <div
-              className="flex items-center gap-2 pl-2 pr-1 py-1 bg-gray-50 border border-gray-200 rounded-lg"
+              className="flex items-center gap-1 pl-1.5 pr-1 py-1 bg-gray-50 border border-gray-200 rounded-lg"
               title={user?.email || ''}
             >
               <span
-                className={`flex items-center justify-center w-7 h-7 rounded-full flex-shrink-0 ${
+                className={`flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0 ${
                   isAdmin ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'
                 }`}
               >
-                {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
-              </span>
-              <span className="hidden lg:block text-xs text-gray-600 max-w-[140px] truncate">
-                {user?.email}
+                {isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
               </span>
               <button
                 onClick={signOut}
                 title="Se déconnecter"
-                className="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
+                className="flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -549,7 +595,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
         onClose={() => setShowUserManagement(false)}
       />
 
-      <div className="fixed top-16 left-0 right-0 z-40 px-4">
+      <div className="fixed top-14 left-0 right-0 z-40 px-4">
         <div className="max-w-[95%] mx-auto">
           {error && (
             <div className="mb-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 animate-slideIn">
