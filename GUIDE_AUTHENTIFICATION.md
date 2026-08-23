@@ -91,16 +91,38 @@ Si la personne voit « Accès non autorisé » alors que vous venez de l'ajouter
 elle n'a plus besoin de se déconnecter : le bouton **Réessayer** de cet écran
 relance la vérification auprès du serveur.
 
-### Si « Ajouter » ne fonctionne pas
+### Si « Ajouter » ou la liste ne fonctionne pas
 
-Le message d'erreur affiché sous le formulaire indique désormais la cause exacte :
+Le message d'erreur affiché sous le formulaire indique la cause exacte :
 
 | Message | Cause | Correctif |
 |---|---|---|
-| *Accès refusé par les règles Firestore* | Les règles publiées dans la console ne sont pas celles de `rules.txt` | Refaire l'**étape 2** |
+| *Accès refusé par les règles Firestore* | Les règles publiées dans la console ne sont pas celles de `rules.txt` | Voir le panneau de diagnostic ci-dessous |
 | *Service Firestore injoignable* | Poste hors ligne | L'ajout part en file d'attente et s'appliquera au retour du réseau |
 | *Session expirée* | Jeton de connexion périmé | Se déconnecter puis se reconnecter |
 | *Erreur Firestore (code : …)* | Autre | Communiquer le code |
+
+Sur un refus des règles, un panneau apparaît directement dans la fenêtre
+**Utilisateurs**, avec trois boutons :
+
+- **Diagnostiquer** — teste séparément la lecture de sa propre fiche, la liste
+  complète et l'écriture, et affiche l'email réellement présent dans le jeton
+  de connexion ainsi que le projet Firebase contacté. Si le projet affiché
+  n'est pas `schedules-c28a2`, les règles ont été publiées au mauvais endroit
+  (voir l'étape 0).
+- **Copier les règles** — place le contenu à jour de `rules.txt` dans le
+  presse-papiers, sans aller le chercher dans le dépôt.
+- **Ouvrir la console** — ouvre directement l'onglet *Règles* du bon projet.
+
+Il ne reste qu'à tout sélectionner dans l'éditeur de la console, coller, puis
+**Publier**. Comptez une minute avant que la modification prenne effet.
+
+> **Casse de l'email.** Les règles comparent désormais l'email du jeton en
+> minuscules (`request.auth.token.email.lower()`). Les versions antérieures le
+> comparaient tel quel : un fournisseur renvoyant `Prenom.Nom@exemple.fr` était
+> alors reconnu par l'application mais refusé par les règles — la fenêtre
+> Utilisateurs s'ouvrait et affichait « Accès refusé ». Republier les règles
+> corrige ce décalage.
 
 ### Révoquer un utilisateur
 

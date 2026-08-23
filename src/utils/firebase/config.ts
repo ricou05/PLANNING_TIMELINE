@@ -17,6 +17,10 @@ const firebaseConfig = {
   appId: "1:719002193306:web:92966bba6c38fcf31a7e23"
 };
 
+/** Projet Firebase réellement utilisé — affiché par le diagnostic d'accès :
+ *  publier les règles dans un autre projet n'a aucun effet sur l'application. */
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 

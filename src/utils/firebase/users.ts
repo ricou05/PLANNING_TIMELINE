@@ -10,9 +10,10 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from './config';
+import { db, auth, FIREBASE_PROJECT_ID } from './config';
 import { BOOTSTRAP_ADMIN_EMAIL, normalizeEmail } from './auth';
 import { withTimeout, TIMED_OUT, isFirebaseError } from './error-handling';
+import firestoreRules from './rules.txt?raw';
 
 export type UserRole = 'admin' | 'user';
 
@@ -49,7 +50,7 @@ export const describeFirestoreError = (error: unknown): string => {
   if (isFirebaseError(error)) {
     switch (error.code) {
       case 'permission-denied':
-        return "Accès refusé par les règles Firestore. Vérifiez que les règles à jour (src/utils/firebase/rules.txt) ont bien été publiées dans la console Firebase.";
+        return 'Accès refusé par les règles Firestore.';
       case 'unavailable':
         return 'Service Firestore injoignable. Vérifiez votre connexion Internet.';
       case 'unauthenticated':
@@ -142,6 +143,121 @@ export const removeAllowedUser = async (email: string): Promise<AddUserResult> =
     WRITE_TIMEOUT_MS
   );
   return result === TIMED_OUT ? { queued: true } : {};
+};
+
+/** Texte intégral des règles Firestore à publier dans la console. */
+export const FIRESTORE_RULES = firestoreRules;
+
+/** Lien direct vers l'onglet Règles du bon projet Firebase. */
+export const FIRESTORE_RULES_CONSOLE_URL =
+  `https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/firestore/rules`;
+
+export interface AccessProbe {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface AccessDiagnostic {
+  /** Email tel que le fournisseur d'identité le renvoie (casse d'origine). */
+  tokenEmail: string;
+  /** Le même, normalisé : c'est lui qui sert d'identifiant de document. */
+  normalizedEmail: string;
+  /** L'application considère ce compte comme l'admin principal. */
+  isBootstrapAdmin: boolean;
+  projectId: string;
+  probes: AccessProbe[];
+  /** Toutes les opérations refusées par les règles de sécurité. */
+  allDenied: boolean;
+  /** Au moins une sonde n'a pas pu joindre Firestore : verdict non concluant. */
+  unreachable: boolean;
+}
+
+/** Chaque sonde est bornée : un diagnostic qui ne rend jamais la main
+ *  n'apprend rien, et Firestore hors ligne ne rejette pas de lui-même. */
+const PROBE_TIMEOUT_MS = 6000;
+
+const probe = async (label: string, run: () => Promise<string>): Promise<AccessProbe> => {
+  try {
+    const detail = await withTimeout(run(), PROBE_TIMEOUT_MS);
+    return detail === TIMED_OUT
+      ? { label, ok: false, detail: 'aucune réponse du serveur' }
+      : { label, ok: true, detail };
+  } catch (error) {
+    const code = isFirebaseError(error) ? error.code : 'inconnu';
+    return { label, ok: false, detail: code };
+  }
+};
+
+/**
+ * Teste une à une les opérations dont dépend la gestion des utilisateurs, pour
+ * dire précisément laquelle est refusée plutôt que « accès refusé ». Les trois
+ * sondes sont sans effet de bord : la seule écriture réinscrit la fiche de
+ * l'admin principal à l'identique (même opération que ensureBootstrapAdminDoc).
+ */
+export const diagnoseUserAccess = async (): Promise<AccessDiagnostic> => {
+  const tokenEmail = auth.currentUser?.email || '';
+  const normalized = normalizeEmail(tokenEmail);
+  const isBootstrap = normalized === BOOTSTRAP_ADMIN_EMAIL;
+
+  const probes: AccessProbe[] = [];
+
+  // Sans email dans le jeton, aucune règle ne peut accorder quoi que ce soit :
+  // inutile d'interroger Firestore, le verdict est déjà connu.
+  if (!normalized) {
+    return {
+      tokenEmail,
+      normalizedEmail: normalized,
+      isBootstrapAdmin: false,
+      projectId: FIREBASE_PROJECT_ID,
+      probes: [
+        {
+          label: 'Compte connecté',
+          ok: false,
+          detail: "aucun email associé — déconnectez-vous puis reconnectez-vous",
+        },
+      ],
+      allDenied: false,
+      unreachable: false,
+    };
+  }
+
+  probes.push(
+    await probe('Lire sa propre fiche (get)', async () => {
+      const snapshot = await getDocFromServer(doc(db, 'allowedUsers', normalized));
+      return snapshot.exists() ? `fiche présente (rôle ${snapshot.data().role})` : 'aucune fiche';
+    })
+  );
+
+  probes.push(
+    await probe('Lister les utilisateurs (list)', async () => {
+      const snapshot = await getDocs(query(allowedUsersRef(), orderBy('email')));
+      return `${snapshot.size} fiche(s)`;
+    })
+  );
+
+  if (isBootstrap) {
+    probes.push(
+      await probe("Écrire la fiche de l'admin principal (create)", async () => {
+        await setDoc(
+          doc(db, 'allowedUsers', normalized),
+          { email: normalized, role: 'admin', addedAt: Timestamp.now(), addedBy: normalized },
+          { merge: true }
+        );
+        return 'écriture acceptée';
+      })
+    );
+  }
+
+  return {
+    tokenEmail,
+    normalizedEmail: normalized,
+    isBootstrapAdmin: isBootstrap,
+    projectId: FIREBASE_PROJECT_ID,
+    probes,
+    allDenied: probes.every(p => p.detail === 'permission-denied'),
+    unreachable: probes.some(p => p.detail === 'aucune réponse du serveur' || p.detail === 'unavailable'),
+  };
 };
 
 // Crée la fiche de l'admin bootstrap si elle n'existe pas encore, pour
