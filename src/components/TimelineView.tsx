@@ -4,9 +4,10 @@ import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import DraggableEmployeeList from './DraggableEmployeeList';
-import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS } from '../utils/timeUtils';
+import { timeToMinutes, minutesToTime, clampTime, TIME_CONSTRAINTS, formatHours } from '../utils/timeUtils';
 import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/periodUtils';
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
+import { calculateDayTotal } from '../utils/totalsCalculations';
 import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
 import { X, FileDown, CalendarOff, Users, MoveVertical, Info } from 'lucide-react';
 import {
@@ -207,9 +208,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const timelineWidth = (timeToMinutes(TIME_CONSTRAINTS.MAX_TIME) - timeToMinutes(TIME_CONSTRAINTS.MIN_TIME)) / 15 * (HOUR_WIDTH / 4);
   const totalWidth = timelineWidth + COLUMN_WIDTH.employee + COLUMN_WIDTH.dailyTotal + COLUMN_WIDTH.weeklyTotal;
 
-  const totalDailyHours = employees.reduce((sum, emp) => {
-    return sum + calculateDailyHours(schedules[`${emp.id}-${day}`]);
-  }, 0);
+  const totalDailyHours = calculateDayTotal(schedules, day, employees);
 
   // Couverture : nombre de présents par créneau de 15 min, avec détail par rayon (couleur)
   const dayStartMin = timeToMinutes(TIME_CONSTRAINTS.MIN_TIME);
@@ -591,7 +590,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 })}
               </div>
               <div style={{ width: COLUMN_WIDTH.dailyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
-                <span className="text-xs font-bold text-blue-700">{totalDailyHours.toFixed(2)}h</span>
+                <span className="text-xs font-bold text-blue-700">{formatHours(totalDailyHours)}</span>
                 <span className="text-xs font-medium text-gray-500">Total jour</span>
               </div>
               <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
@@ -809,13 +808,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                       : {})}
                   >
                     <span className="text-sm font-medium text-blue-600">
-                      {dailyHours.toFixed(2)}h
+                      {formatHours(dailyHours)}
                     </span>
                     {canDragDay && <MoveVertical className="w-3 h-3 text-gray-400" />}
                   </div>
                   <div style={{ width: COLUMN_WIDTH.weeklyTotal }} className="flex-shrink-0 border-l border-gray-200 flex items-center justify-center">
                     <span className="text-sm font-medium text-blue-600">
-                      {weeklyHours.toFixed(2)}h
+                      {formatHours(weeklyHours)}
                     </span>
                   </div>
                 </div>

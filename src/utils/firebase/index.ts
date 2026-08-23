@@ -19,9 +19,11 @@ export {
 } from './auth';
 export {
   getAllowedUser,
+  lookupAllowedUser,
   listAllowedUsers,
   addAllowedUser,
   removeAllowedUser,
   ensureBootstrapAdminDoc,
+  describeFirestoreError,
 } from './users';
-export type { AllowedUser, UserRole } from './users';
+export type { AllowedUser, AllowedUserLookup, UserRole, AddUserResult } from './users';

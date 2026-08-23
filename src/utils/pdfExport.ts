@@ -1,6 +1,7 @@
 import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateWeeklyHours, calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
+import { formatHoursHM as formatHours } from './timeUtils';
 
 export interface PDFExportOptions {
   showTotalColumn: boolean;
@@ -49,12 +50,6 @@ const getColorHex = (managedColors: ManagedColor[], colorName?: string): string 
 const getTextColor = (managedColors: ManagedColor[], colorName?: string): string => {
   const mc = findManagedColor(managedColors, colorName);
   return mc ? getTextColorForHex(mc.hex) : '#000000';
-};
-
-const formatHours = (hours: number): string => {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 };
 
 const buildLegend = (managedColors: ManagedColor[]): HTMLElement => {
@@ -515,7 +510,7 @@ const createGridPDFTable = ({
     if (showTotal) {
       const totalCell = document.createElement('td');
       totalCell.style.cssText = `${cellBase}font-weight:700;color:#111827;background:#ffffff;`;
-      totalCell.textContent = weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '-';
+      totalCell.textContent = weeklyTotal > 0 ? formatHours(weeklyTotal) : '-';
       tr.appendChild(totalCell);
     }
 
@@ -541,14 +536,14 @@ const createGridPDFTable = ({
       if (schedule) dayTotal += calculateDailyHours(schedule);
     });
     grandTotal += dayTotal;
-    td.textContent = dayTotal > 0 ? `${dayTotal.toFixed(1)}h` : '-';
+    td.textContent = dayTotal > 0 ? formatHours(dayTotal) : '-';
     footerRow.appendChild(td);
   });
 
   if (showTotal) {
     const grandTotalCell = document.createElement('td');
     grandTotalCell.style.cssText = `${cellBase}font-weight:700;color:#111827;background:#f3f4f6;`;
-    grandTotalCell.textContent = grandTotal > 0 ? `${grandTotal.toFixed(1)}h` : '-';
+    grandTotalCell.textContent = grandTotal > 0 ? formatHours(grandTotal) : '-';
     footerRow.appendChild(grandTotalCell);
   }
 
@@ -738,7 +733,7 @@ const createVisualPDFTable = ({
     if (showTotal) {
       const totalCell = document.createElement('td');
       totalCell.style.cssText = `${cellBase}font-weight:700;color:#1d4ed8;background:${rowBg};`;
-      totalCell.textContent = weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—';
+      totalCell.textContent = weeklyTotal > 0 ? formatHours(weeklyTotal) : '—';
       tr.appendChild(totalCell);
     }
 
@@ -764,14 +759,14 @@ const createVisualPDFTable = ({
       if (schedule) dayTotal += calculateDailyHours(schedule);
     });
     grandTotal += dayTotal;
-    td.textContent = dayTotal > 0 ? `${dayTotal.toFixed(1)}h` : '—';
+    td.textContent = dayTotal > 0 ? formatHours(dayTotal) : '—';
     footerRow.appendChild(td);
   });
 
   if (showTotal) {
     const grandTotalCell = document.createElement('td');
     grandTotalCell.style.cssText = `${cellBase}font-weight:700;color:#1d4ed8;background:#e5e7eb;`;
-    grandTotalCell.textContent = grandTotal > 0 ? `${grandTotal.toFixed(1)}h` : '—';
+    grandTotalCell.textContent = grandTotal > 0 ? formatHours(grandTotal) : '—';
     footerRow.appendChild(grandTotalCell);
   }
 

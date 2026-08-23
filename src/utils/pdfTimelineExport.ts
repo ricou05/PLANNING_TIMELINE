@@ -1,7 +1,7 @@
 import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
-import { timeToMinutes, minutesToTime, TIME_CONSTRAINTS } from './timeUtils';
+import { timeToMinutes, minutesToTime, TIME_CONSTRAINTS, formatHoursHM as formatHours } from './timeUtils';
 
 interface ExportTimelinePDFParams {
   employees: Employee[];
@@ -19,12 +19,6 @@ const TOTAL_COL_W = 60;
 const ROW_H = 32;
 
 const REST_DAY_BG = `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 6px)`;
-
-const formatHours = (h: number): string => {
-  const hrs = Math.floor(h);
-  const mins = Math.round((h - hrs) * 60);
-  return mins > 0 ? `${hrs}h${mins.toString().padStart(2, '0')}` : `${hrs}h`;
-};
 
 const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   const { employees, day, date, schedules, weekNumber, year, managedColors } = params;
