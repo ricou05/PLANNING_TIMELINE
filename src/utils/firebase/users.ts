@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   deleteDoc,
@@ -11,8 +12,13 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { BOOTSTRAP_ADMIN_EMAIL, normalizeEmail } from './auth';
+import { withTimeout, TIMED_OUT, isFirebaseError } from './error-handling';
 
 export type UserRole = 'admin' | 'user';
+
+/** Au-delà, on considère l'écriture bloquée (hors ligne, réseau coupé). */
+const WRITE_TIMEOUT_MS = 8000;
+const READ_TIMEOUT_MS = 8000;
 
 export interface AllowedUser {
   email: string;
@@ -21,38 +27,121 @@ export interface AllowedUser {
   addedBy?: string;
 }
 
+/**
+ * Résultat d'une vérification d'autorisation. La distinction est capitale :
+ * `denied` veut dire « le serveur a répondu : cet email n'est pas dans la
+ * liste », alors que `unknown` veut dire « on n'a pas pu vérifier ». Traiter
+ * les deux de la même façon refusait l'accès à un utilisateur pourtant
+ * autorisé dès que la lecture échouait (cache local vide, réseau lent).
+ */
+export type AllowedUserLookup =
+  | { status: 'allowed'; user: AllowedUser }
+  | { status: 'denied' }
+  | { status: 'unknown'; reason: string };
+
 // Liste blanche des utilisateurs autorisés. L'ID de chaque document est
 // l'email en minuscules ; les règles Firestore s'appuient dessus pour
 // n'accorder l'accès aux plannings qu'aux emails présents ici.
 const allowedUsersRef = () => collection(db, 'allowedUsers');
 
+/** Message lisible à partir d'une erreur Firestore (code technique inclus). */
+export const describeFirestoreError = (error: unknown): string => {
+  if (isFirebaseError(error)) {
+    switch (error.code) {
+      case 'permission-denied':
+        return "Accès refusé par les règles Firestore. Vérifiez que les règles à jour (src/utils/firebase/rules.txt) ont bien été publiées dans la console Firebase.";
+      case 'unavailable':
+        return 'Service Firestore injoignable. Vérifiez votre connexion Internet.';
+      case 'unauthenticated':
+        return 'Session expirée. Déconnectez-vous puis reconnectez-vous.';
+      default:
+        return `Erreur Firestore (code : ${error.code}).`;
+    }
+  }
+  return error instanceof Error ? error.message : 'Erreur inattendue.';
+};
+
+/**
+ * Lit la fiche d'un utilisateur. Une absence constatée depuis le seul cache
+ * local ne prouve rien : on redemande alors au serveur avant de conclure.
+ */
+export const lookupAllowedUser = async (email: string): Promise<AllowedUserLookup> => {
+  const ref = doc(db, 'allowedUsers', normalizeEmail(email));
+  try {
+    const snapshot = await withTimeout(getDoc(ref), READ_TIMEOUT_MS);
+
+    if (snapshot !== TIMED_OUT && snapshot.exists()) {
+      return { status: 'allowed', user: snapshot.data() as AllowedUser };
+    }
+
+    // Fiche absente du cache (ou lecture trop lente) : seul le serveur peut
+    // trancher, notamment pour un utilisateur que l'admin vient d'ajouter.
+    if (snapshot === TIMED_OUT || snapshot.metadata.fromCache) {
+      const fresh = await withTimeout(getDocFromServer(ref), READ_TIMEOUT_MS);
+      if (fresh === TIMED_OUT) {
+        return { status: 'unknown', reason: 'Le serveur n’a pas répondu à temps.' };
+      }
+      return fresh.exists()
+        ? { status: 'allowed', user: fresh.data() as AllowedUser }
+        : { status: 'denied' };
+    }
+
+    return { status: 'denied' };
+  } catch (error) {
+    // Une lecture refusée sur sa propre fiche = fiche inexistante côté règles
+    // seulement si le serveur a répondu ; sinon on reste dans l'incertitude.
+    return { status: 'unknown', reason: describeFirestoreError(error) };
+  }
+};
+
 export const getAllowedUser = async (email: string): Promise<AllowedUser | null> => {
-  const snapshot = await getDoc(doc(db, 'allowedUsers', normalizeEmail(email)));
-  if (!snapshot.exists()) return null;
-  return snapshot.data() as AllowedUser;
+  const result = await lookupAllowedUser(email);
+  return result.status === 'allowed' ? result.user : null;
 };
 
 export const listAllowedUsers = async (): Promise<AllowedUser[]> => {
-  const snapshot = await getDocs(query(allowedUsersRef(), orderBy('email')));
+  const snapshot = await withTimeout(
+    getDocs(query(allowedUsersRef(), orderBy('email'))),
+    READ_TIMEOUT_MS
+  );
+  if (snapshot === TIMED_OUT) {
+    throw new Error('La liste des utilisateurs met trop de temps à répondre.');
+  }
   return snapshot.docs.map(d => d.data() as AllowedUser);
 };
+
+export interface AddUserResult {
+  /** Écriture partie mais pas encore confirmée par le serveur (hors ligne). */
+  queued?: boolean;
+}
 
 export const addAllowedUser = async (
   email: string,
   role: UserRole,
   addedBy: string
-): Promise<void> => {
+): Promise<AddUserResult> => {
   const normalized = normalizeEmail(email);
-  await setDoc(doc(db, 'allowedUsers', normalized), {
-    email: normalized,
-    role,
-    addedAt: Timestamp.now(),
-    addedBy: normalizeEmail(addedBy),
-  });
+  // Hors ligne, setDoc ne rejette pas : la promesse reste en attente tant que
+  // le serveur n'a pas répondu. Sans ce garde-fou, le bouton « Ajouter »
+  // tournait indéfiniment et l'ajout semblait ne « pas fonctionner ».
+  const result = await withTimeout(
+    setDoc(doc(db, 'allowedUsers', normalized), {
+      email: normalized,
+      role,
+      addedAt: Timestamp.now(),
+      addedBy: normalizeEmail(addedBy),
+    }),
+    WRITE_TIMEOUT_MS
+  );
+  return result === TIMED_OUT ? { queued: true } : {};
 };
 
-export const removeAllowedUser = async (email: string): Promise<void> => {
-  await deleteDoc(doc(db, 'allowedUsers', normalizeEmail(email)));
+export const removeAllowedUser = async (email: string): Promise<AddUserResult> => {
+  const result = await withTimeout(
+    deleteDoc(doc(db, 'allowedUsers', normalizeEmail(email))),
+    WRITE_TIMEOUT_MS
+  );
+  return result === TIMED_OUT ? { queued: true } : {};
 };
 
 // Crée la fiche de l'admin bootstrap si elle n'existe pas encore, pour
@@ -60,8 +149,8 @@ export const removeAllowedUser = async (email: string): Promise<void> => {
 // d'échec (hors ligne, etc.) : son accès ne dépend pas de cette fiche.
 export const ensureBootstrapAdminDoc = async (): Promise<void> => {
   try {
-    const existing = await getAllowedUser(BOOTSTRAP_ADMIN_EMAIL);
-    if (!existing) {
+    const existing = await lookupAllowedUser(BOOTSTRAP_ADMIN_EMAIL);
+    if (existing.status === 'denied') {
       await addAllowedUser(BOOTSTRAP_ADMIN_EMAIL, 'admin', BOOTSTRAP_ADMIN_EMAIL);
     }
   } catch (error) {

@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { User } from 'firebase/auth';
 import {
   BOOTSTRAP_ADMIN_EMAIL,
   normalizeEmail,
   subscribeToAuthState,
   signOutUser,
-  getAllowedUser,
+  lookupAllowedUser,
   ensureBootstrapAdminDoc,
 } from '../utils/firebase';
 import type { UserRole } from '../utils/firebase';
@@ -21,6 +21,13 @@ interface AuthContextValue {
   user: User | null;
   role: UserRole | null;
   isAdmin: boolean;
+  /**
+   * Renseigné quand le refus vient d'une vérification impossible (réseau,
+   * règles Firestore) et non d'une absence avérée de la liste blanche.
+   */
+  authError: string | null;
+  /** Relance la vérification sans avoir à se déconnecter/reconnecter. */
+  recheck: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -30,68 +37,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const userRef = useRef<User | null>(null);
+
+  // Vérifie l'appartenance à la liste blanche pour un utilisateur connecté.
+  const checkAuthorization = useCallback(async (firebaseUser: User, isStale: () => boolean) => {
+    const email = normalizeEmail(firebaseUser.email || '');
+
+    // L'admin principal est toujours autorisé (même si sa fiche
+    // allowedUsers n'existe pas encore) : c'est lui qui amorce le système.
+    if (email === BOOTSTRAP_ADMIN_EMAIL) {
+      ensureBootstrapAdminDoc();
+      if (isStale()) return;
+      setRole('admin');
+      setAuthError(null);
+      setStatus('authorized');
+      return;
+    }
+
+    const result = await lookupAllowedUser(email);
+    if (isStale()) return;
+
+    if (result.status === 'allowed') {
+      setRole(result.user.role);
+      setAuthError(null);
+      setStatus('authorized');
+      return;
+    }
+
+    // « unknown » = la liste blanche n'a pas pu être lue. On refuse l'entrée
+    // (les règles Firestore refuseraient de toute façon les données), mais on
+    // le dit clairement pour que l'utilisateur puisse réessayer, au lieu de
+    // lui annoncer à tort qu'il n'est pas autorisé.
+    setRole(null);
+    setAuthError(result.status === 'unknown' ? result.reason : null);
+    setStatus('unauthorized');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const isStale = () => cancelled;
 
     const unsubscribe = subscribeToAuthState(async (firebaseUser) => {
       if (cancelled) return;
 
       if (!firebaseUser || !firebaseUser.email) {
+        userRef.current = null;
         setUser(null);
         setRole(null);
+        setAuthError(null);
         setStatus('signedOut');
         return;
       }
 
+      userRef.current = firebaseUser;
       setUser(firebaseUser);
       setStatus('loading');
-
-      const email = normalizeEmail(firebaseUser.email);
-
-      // L'admin principal est toujours autorisé (même si sa fiche
-      // allowedUsers n'existe pas encore) : c'est lui qui amorce le système.
-      if (email === BOOTSTRAP_ADMIN_EMAIL) {
-        ensureBootstrapAdminDoc();
-        if (!cancelled) {
-          setRole('admin');
-          setStatus('authorized');
-        }
-        return;
-      }
-
-      try {
-        const allowed = await getAllowedUser(email);
-        if (cancelled) return;
-        if (allowed) {
-          setRole(allowed.role);
-          setStatus('authorized');
-        } else {
-          setRole(null);
-          setStatus('unauthorized');
-        }
-      } catch (error) {
-        // Lecture refusée par les règles ou impossible → pas d'accès
-        console.warn("Vérification d'autorisation impossible:", error);
-        if (!cancelled) {
-          setRole(null);
-          setStatus('unauthorized');
-        }
-      }
+      await checkAuthorization(firebaseUser, isStale);
     });
 
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
+  }, [checkAuthorization]);
+
+  // Nouvelle tentative déclenchée par l'utilisateur (bouton « Réessayer »),
+  // utile juste après qu'un administrateur vient d'ajouter son email.
+  useEffect(() => {
+    if (attempt === 0) return;
+    const current = userRef.current;
+    if (!current) return;
+
+    let cancelled = false;
+    setStatus('loading');
+    checkAuthorization(current, () => cancelled);
+    return () => { cancelled = true; };
+  }, [attempt, checkAuthorization]);
+
+  const recheck = useCallback(() => setAttempt(n => n + 1), []);
 
   const signOut = useCallback(async () => {
     await signOutUser();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ status, user, role, isAdmin: role === 'admin', signOut }}>
+    <AuthContext.Provider
+      value={{ status, user, role, isAdmin: role === 'admin', authError, recheck, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

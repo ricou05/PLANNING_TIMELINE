@@ -87,6 +87,21 @@ Seuls les emails ajoutés à cette liste ont accès aux plannings. Une personne 
 autorisée qui créerait un compte verrait un écran « Accès non autorisé » et les
 règles de sécurité lui refuseraient toute donnée.
 
+Si la personne voit « Accès non autorisé » alors que vous venez de l'ajouter,
+elle n'a plus besoin de se déconnecter : le bouton **Réessayer** de cet écran
+relance la vérification auprès du serveur.
+
+### Si « Ajouter » ne fonctionne pas
+
+Le message d'erreur affiché sous le formulaire indique désormais la cause exacte :
+
+| Message | Cause | Correctif |
+|---|---|---|
+| *Accès refusé par les règles Firestore* | Les règles publiées dans la console ne sont pas celles de `rules.txt` | Refaire l'**étape 2** |
+| *Service Firestore injoignable* | Poste hors ligne | L'ajout part en file d'attente et s'appliquera au retour du réseau |
+| *Session expirée* | Jeton de connexion périmé | Se déconnecter puis se reconnecter |
+| *Erreur Firestore (code : …)* | Autre | Communiquer le code |
+
 ### Révoquer un utilisateur
 
 Bouton **Utilisateurs** → icône corbeille en face de son email → **Révoquer**.

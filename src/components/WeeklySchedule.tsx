@@ -9,6 +9,7 @@ import DraggableEmployeeList from './DraggableEmployeeList';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
+import { formatHours } from '../utils/timeUtils';
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
@@ -585,7 +586,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                     })}
                     <td rowSpan={2} className="border-l-4 border-l-black text-center align-middle font-medium text-blue-600 bg-white">
                       <div className="flex items-center justify-center gap-1">
-                        {weeklyTotal.toFixed(2)}h
+                        {formatHours(weeklyTotal)}
                         {complianceIssues.length > 0 && (
                           <span
                             title={complianceIssues.map(i => i.message).join('\n')}
@@ -633,11 +634,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
               <td className="border-r-4 border-r-black"></td>
               {days.map((day) => (
                 <td key={day} className="border-r-4 border-r-black text-center font-bold text-blue-600">
-                  {calculateDayTotal(schedules, day).toFixed(2)}h
+                  {formatHours(calculateDayTotal(schedules, day, employees))}
                 </td>
               ))}
               <td className="border-l-4 border-l-black text-center font-bold text-blue-600">
-                {calculateGrandTotal(schedules).toFixed(2)}h
+                {formatHours(calculateGrandTotal(schedules, employees))}
               </td>
             </tr>
           </tbody>

@@ -5,6 +5,7 @@ import AbsencePeriodChooser from './AbsencePeriodChooser';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
+import { formatHours } from '../utils/timeUtils';
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
@@ -625,7 +626,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                   })}
                   <td className="border border-gray-300 text-center font-bold text-blue-700 align-middle">
                     <div className="flex items-center justify-center gap-1">
-                      {weeklyTotal > 0 ? `${weeklyTotal.toFixed(1)}h` : '—'}
+                      {weeklyTotal > 0 ? formatHours(weeklyTotal) : '—'}
                       {complianceIssues.length > 0 && (
                         <span
                           title={complianceIssues.map(i => i.message).join('\n')}
@@ -651,15 +652,15 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                   className="border border-gray-300 text-center py-2 text-blue-700"
                 >
                   {(() => {
-                    const t = calculateDayTotal(schedules, day);
-                    return t > 0 ? `${t.toFixed(1)}h` : '—';
+                    const t = calculateDayTotal(schedules, day, employees);
+                    return t > 0 ? formatHours(t) : '—';
                   })()}
                 </td>
               ))}
               <td className="border border-gray-300 text-center py-2 text-blue-700">
                 {(() => {
-                  const t = calculateGrandTotal(schedules);
-                  return t > 0 ? `${t.toFixed(1)}h` : '—';
+                  const t = calculateGrandTotal(schedules, employees);
+                  return t > 0 ? formatHours(t) : '—';
                 })()}
               </td>
             </tr>

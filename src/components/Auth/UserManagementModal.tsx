@@ -14,6 +14,7 @@ import {
   listAllowedUsers,
   addAllowedUser,
   removeAllowedUser,
+  describeFirestoreError,
   BOOTSTRAP_ADMIN_EMAIL,
   normalizeEmail,
 } from '../../utils/firebase';
@@ -47,7 +48,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
       setUsers(await listAllowedUsers());
     } catch (err) {
       console.error('Erreur lors du chargement des utilisateurs:', err);
-      setError('Impossible de charger la liste des utilisateurs.');
+      setError(`Impossible de charger la liste des utilisateurs. ${describeFirestoreError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -80,16 +81,19 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
 
     try {
       setSaving(true);
-      await addAllowedUser(email, newRole, currentEmail);
+      const { queued } = await addAllowedUser(email, newRole, currentEmail);
       setSuccess(
-        `${email} peut maintenant créer son accès via « Première connexion » sur la page de login.`
+        queued
+          ? `${email} a été ajouté hors ligne : l'autorisation sera effective dès le retour de la connexion.`
+          : `${email} peut maintenant créer son accès via « Première connexion » sur la page de login.`
       );
       setNewEmail('');
       setNewRole('user');
-      await loadUsers();
+      // Hors ligne la relecture serveur échouerait : on n'insiste pas.
+      if (!queued) await loadUsers();
     } catch (err) {
       console.error("Erreur lors de l'ajout de l'utilisateur:", err);
-      setError("Impossible d'ajouter cet utilisateur. Vérifiez votre connexion et vos droits.");
+      setError(`Impossible d'ajouter cet utilisateur. ${describeFirestoreError(err)}`);
     } finally {
       setSaving(false);
     }
@@ -100,12 +104,16 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
       setSaving(true);
       setError(null);
       setSuccess(null);
-      await removeAllowedUser(target.email);
-      setSuccess(`L'accès de ${target.email} a été révoqué.`);
-      await loadUsers();
+      const { queued } = await removeAllowedUser(target.email);
+      setSuccess(
+        queued
+          ? `La révocation de ${target.email} sera effective dès le retour de la connexion.`
+          : `L'accès de ${target.email} a été révoqué.`
+      );
+      if (!queued) await loadUsers();
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      setError('Impossible de révoquer cet utilisateur.');
+      setError(`Impossible de révoquer cet utilisateur. ${describeFirestoreError(err)}`);
     } finally {
       setSaving(false);
       setUserToDelete(null);
