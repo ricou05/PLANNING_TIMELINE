@@ -29,27 +29,38 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
 
   return (
     <div className="flex items-center gap-2" title="Rayon appliqué aux créneaux saisis">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center 3xl:items-start gap-1.5 3xl:gap-2">
         {managedColors.map((color) => (
-          <button
-            key={color.id}
-            onClick={() => onColorChange(color.id)}
-            className={`w-7 h-7 rounded-full border-2 transition-all duration-150 ${
-              selectedColor === color.id
-                ? 'ring-2 ring-offset-1 ring-blue-500'
-                : 'hover:scale-110'
-            }`}
-            style={{ backgroundColor: color.hex, borderColor: color.hex }}
-            title={color.label}
-            aria-label={color.label}
-            aria-pressed={selectedColor === color.id}
-          />
+          <div key={color.id} className="flex flex-col items-center gap-0.5">
+            <button
+              onClick={() => onColorChange(color.id)}
+              className={`w-7 h-7 rounded-full border-2 transition-all duration-150 ${
+                selectedColor === color.id
+                  ? 'ring-2 ring-offset-1 ring-blue-500'
+                  : 'hover:scale-110'
+              }`}
+              style={{ backgroundColor: color.hex, borderColor: color.hex }}
+              title={color.label}
+              aria-label={color.label}
+              aria-pressed={selectedColor === color.id}
+            />
+            {/* Écran large : le libellé s'affiche sous chaque pastille. Plus
+                étroit, il ne reste que celui du rayon sélectionné (ci-dessous),
+                le reste passant par l'infobulle. */}
+            <span
+              className={`hidden 3xl:block text-[10px] leading-tight whitespace-nowrap ${
+                selectedColor === color.id ? 'font-semibold text-gray-700' : 'text-gray-500'
+              }`}
+            >
+              {color.label}
+            </span>
+          </div>
         ))}
       </div>
 
       {selected && (
         <span
-          className="text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[4rem]"
+          className="3xl:hidden text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[4rem]"
           title="Rayon actuellement sélectionné"
         >
           {selected.label}
