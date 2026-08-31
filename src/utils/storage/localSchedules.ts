@@ -89,3 +89,16 @@ function createTimestamp(timestamp: StoredTimestamp): Timestamp {
 
   return Timestamp.now();
 }
+
+/** Renomme une sauvegarde locale sans toucher à son contenu ni à ses dates. */
+export const renameLocalSchedule = async (id: string, name: string): Promise<void> => {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return;
+
+  const schedules = JSON.parse(stored) as StoredSchedule[];
+  const index = schedules.findIndex(s => s.id === id);
+  if (index === -1) return;
+
+  schedules[index] = { ...schedules[index], name };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules));
+};

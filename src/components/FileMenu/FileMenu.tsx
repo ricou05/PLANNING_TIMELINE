@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop, ChevronDown } from 'lucide-react';
+import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop, ChevronDown, Tag } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
-import { getSchedules, saveSchedule, updateSchedule, deleteSchedule } from '../../utils/firebase';
+import { getSchedules, saveSchedule, updateSchedule, deleteSchedule, renameAllSchedules } from '../../utils/firebase';
 import { syncLocalSchedules } from '../../utils/firebase/sync';
 import { loadCloudDraft, CloudDraft } from '../../utils/firebase/drafts';
 import { getDeviceId } from '../../utils/storage/device';
 import { useAuth } from '../../hooks/useAuth';
 import UserManagementModal from '../Auth/UserManagementModal';
 import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
-import { getCurrentWeekNumber } from '../../utils/dateUtils';
+import { buildScheduleName, isCanonicalScheduleName } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData, CloudDraftStatus } from '../../hooks/useScheduleAutoSave';
 import { APP_VERSION } from '../../version';
@@ -27,6 +27,13 @@ interface FileMenuProps {
   onRestore: (savedSchedule: SavedSchedule, weeks?: WeeksMap) => void;
   onSave: () => Promise<SaveData>;
   onNewSchedule?: () => void;
+  /**
+   * Semaine et année du planning affiché : elles nomment la sauvegarde. Se
+   * fier à la date du jour donnait un nom faux dès qu'on préparait une
+   * semaine à l'avance ou qu'on reprenait une semaine passée.
+   */
+  weekNumber: number;
+  year: number;
   autoSaveTimestamp: string | null;
   showAutoSaveIndicator: boolean;
   /** État de l'envoi du brouillon vers le cloud */
@@ -64,6 +71,8 @@ const FileMenu: React.FC<FileMenuProps> = ({
   onRestore,
   onSave,
   onNewSchedule,
+  weekNumber,
+  year,
   autoSaveTimestamp,
   showAutoSaveIndicator,
   cloudDraftStatus,
@@ -93,6 +102,9 @@ const FileMenu: React.FC<FileMenuProps> = ({
   } | null>(null);
   // Brouillon plus récent trouvé en ligne (autre poste)
   const [incomingDraft, setIncomingDraft] = useState<CloudDraft | null>(null);
+  // Renommage en masse des anciennes sauvegardes au format standard
+  const [showRenameAllDialog, setShowRenameAllDialog] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const loadSavedSchedules = useCallback(async () => {
     try {
@@ -390,6 +402,50 @@ const FileMenu: React.FC<FileMenuProps> = ({
     }
   };
 
+  /** Aligne toutes les sauvegardes existantes sur le format standard. */
+  const handleRenameAll = async () => {
+    try {
+      setRenaming(true);
+      setError(null);
+      const result = await renameAllSchedules();
+
+      if (result.renamed > 0) {
+        setSuccess(
+          result.renamed === 1
+            ? '1 sauvegarde renommee au format standard'
+            : `${result.renamed} sauvegardes renommees au format standard`
+        );
+      } else if (result.failed === 0) {
+        setSuccess('Toutes les sauvegardes sont deja au format standard');
+      }
+
+      if (result.failed > 0) {
+        setError(
+          `${result.failed} sauvegarde(s) n'ont pas pu etre renommees${result.error ? ` - ${result.error}` : ''}`
+        );
+      }
+
+      // La sauvegarde ouverte a pu changer de nom : on recharge la liste et
+      // on resynchronise le libellé affiché dans la barre.
+      const refreshed = await getSchedules();
+      setSavedSchedules(refreshed.schedules);
+      setPendingLocalCount(refreshed.schedules.filter(s => s.isLocal).length);
+      setSelectedSchedule(prev => {
+        if (!prev) return prev;
+        const match = refreshed.schedules.find(s => s.id === prev.id);
+        // `updatedAt` a bouge avec le renommage : sans cette remise a jour,
+        // la sauvegarde suivante croirait a une modification concurrente.
+        return match ? { ...prev, name: match.name, updatedAt: match.updatedAt } : prev;
+      });
+    } catch (error) {
+      console.error('Error renaming schedules:', error);
+      setError('Erreur lors du renommage des sauvegardes');
+    } finally {
+      setRenaming(false);
+      setShowRenameAllDialog(false);
+    }
+  };
+
   const handleNewSchedule = () => {
     if (onNewSchedule) {
       onNewSchedule();
@@ -399,6 +455,10 @@ const FileMenu: React.FC<FileMenuProps> = ({
   };
 
   const autoSaveData = showRestoreDialog ? loadScheduleAutoSave() : null;
+
+  // Nom propose a la sauvegarde : semaine du planning affiche + heure courante.
+  const defaultSaveName = buildScheduleName(weekNumber, year);
+  const outdatedNameCount = savedSchedules.filter(s => !isCanonicalScheduleName(s.name)).length;
 
   const localBadge = (
     <span
@@ -727,12 +787,12 @@ const FileMenu: React.FC<FileMenuProps> = ({
                     type="text"
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
-                    placeholder={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-sem-${String(getCurrentWeekNumber()).padStart(2, '0')}_${String(new Date().getHours()).padStart(2, '0')}-${String(new Date().getMinutes()).padStart(2, '0')}`}
+                    placeholder={defaultSaveName}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                     autoFocus
                   />
                   <button
-                    onClick={() => handleSave(saveName || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-sem-${String(getCurrentWeekNumber()).padStart(2, '0')}_${String(new Date().getHours()).padStart(2, '0')}-${String(new Date().getMinutes()).padStart(2, '0')}`)}
+                    onClick={() => handleSave(saveName.trim() || buildScheduleName(weekNumber, year))}
                     disabled={loading}
                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150 whitespace-nowrap"
                   >
@@ -913,12 +973,77 @@ const FileMenu: React.FC<FileMenuProps> = ({
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end">
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex items-center justify-between gap-2">
+              {outdatedNameCount > 0 ? (
+                <button
+                  onClick={() => setShowRenameAllDialog(true)}
+                  disabled={renaming}
+                  title="Renommer toutes les sauvegardes au format AAAA-MM-sem-SS-HH-MM"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                >
+                  <Tag className="w-4 h-4" />
+                  Renommer au format standard ({outdatedNameCount})
+                </button>
+              ) : (
+                <span className="text-xs text-gray-400">Noms au format AAAA-MM-sem-SS-HH-MM</span>
+              )}
               <button
                 onClick={() => setShowRestoreDialog(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Renommage en masse : action groupee, donc confirmee */}
+      {showRenameAllDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
+          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
+            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+              <Tag className="w-5 h-5 text-blue-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Renommer les sauvegardes</h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                {outdatedNameCount === 1
+                  ? '1 sauvegarde va etre renommee'
+                  : `${outdatedNameCount} sauvegardes vont etre renommees`}{' '}
+                au format <span className="font-mono font-medium text-gray-900">AAAA-MM-sem-SS-HH-MM</span>.
+              </p>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700 space-y-1">
+                <div>
+                  <span className="font-medium">AAAA-MM</span> : annee et mois de la semaine planifiee
+                </div>
+                <div>
+                  <span className="font-medium">sem-SS</span> : numero de la semaine du planning
+                </div>
+                <div>
+                  <span className="font-medium">HH-MM</span> : heure de la sauvegarde
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Seuls les noms changent : le contenu des plannings n'est pas touche. Les sauvegardes
+                deja au bon format sont ignorees.
+              </p>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+              <button
+                onClick={() => setShowRenameAllDialog(false)}
+                disabled={renaming}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleRenameAll}
+                disabled={renaming}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 shadow-sm transition-all duration-150"
+              >
+                {renaming && <RefreshCw className="w-4 h-4 animate-spin" />}
+                {renaming ? 'Renommage...' : 'Renommer'}
               </button>
             </div>
           </div>

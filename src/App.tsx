@@ -614,6 +614,8 @@ function App() {
           colorLabels: colorLabelsForSave
         })}
         onNewSchedule={handleNewSchedule}
+        weekNumber={weekNumber}
+        year={year}
         autoSaveTimestamp={scheduleAutoSave.lastAutoSave}
         showAutoSaveIndicator={scheduleAutoSave.showIndicator}
         cloudDraftStatus={scheduleAutoSave.cloudStatus}

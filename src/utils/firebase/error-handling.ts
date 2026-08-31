@@ -1,24 +1,43 @@
 import { FirebaseError } from 'firebase/app';
 
+const SUFFIX = 'Sauvegarde conservée sur ce PC uniquement';
+
+/**
+ * Message affiché pour chaque code d'erreur Firestore. Tout ce qui manquait
+ * ici retombait sur « Erreur de connexion », ce qui masquait la vraie cause :
+ * une donnée refusée ou une session expirée n'ont rien à voir avec le réseau
+ * et n'appellent pas la même action de la part de l'utilisateur.
+ */
+const FIRESTORE_MESSAGES: Record<string, string> = {
+  'permission-denied': 'Accès en ligne refusé',
+  'unauthenticated': 'Session expirée - reconnectez-vous pour sauvegarder en ligne',
+  'unavailable': 'Service indisponible',
+  'deadline-exceeded': 'Le serveur met trop de temps à répondre',
+  'cancelled': 'Envoi interrompu',
+  'not-found': 'Document non trouvé',
+  'already-exists': 'Une sauvegarde porte déjà cet identifiant',
+  'invalid-argument': 'Données refusées par le serveur',
+  'failed-precondition': 'Sauvegarde refusée par le serveur',
+  'aborted': 'Sauvegarde interrompue par une modification simultanée',
+  'out-of-range': 'Données hors limites',
+  'resource-exhausted': 'Quota Firebase atteint',
+  'internal': 'Erreur interne du serveur',
+  'unknown': 'Erreur inconnue du serveur',
+};
+
 export const handleFirebaseError = (error: unknown): string => {
   if (error instanceof FirebaseError) {
-    switch (error.code) {
-      case 'permission-denied':
-        return 'Accès en ligne refusé - Sauvegarde conservée sur ce PC uniquement';
-      case 'unavailable':
-        return 'Service indisponible - Sauvegarde conservée sur ce PC uniquement';
-      case 'not-found':
-        return 'Document non trouvé - Sauvegarde conservée sur ce PC uniquement';
-      default:
-        return 'Erreur de connexion - Sauvegarde conservée sur ce PC uniquement';
-    }
+    const label = FIRESTORE_MESSAGES[error.code];
+    // Le code brut reste affiché quand il n'est pas répertorié : sans lui,
+    // impossible de diagnostiquer une panne à distance.
+    return `${label || `Erreur Firebase (${error.code})`} - ${SUFFIX}`;
   }
 
   if (error instanceof Error) {
-    return `${error.message} - Sauvegarde conservée sur ce PC uniquement`;
+    return `${error.message} - ${SUFFIX}`;
   }
 
-  return 'Erreur inattendue - Sauvegarde conservée sur ce PC uniquement';
+  return `Erreur inattendue - ${SUFFIX}`;
 };
 
 export const isFirebaseError = (error: unknown): error is FirebaseError => {
