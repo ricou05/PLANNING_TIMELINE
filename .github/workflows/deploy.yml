@@ -21,10 +21,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node 18 n'expose pas `globalThis.crypto` : serialize-javascript, tire
+      # par le plugin terser de vite-plugin-pwa, echouait sur
+      # « ReferenceError: crypto is not defined » apres un build pourtant
+      # reussi. Node 18 est de toute facon en fin de vie.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
