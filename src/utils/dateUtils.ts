@@ -82,3 +82,51 @@ export function formatTimestamp(timestamp: SupportedTimestamp): string {
 
   return '';
 }
+
+// ---------------------------------------------------------------------------
+// Nommage normalisé des sauvegardes
+// ---------------------------------------------------------------------------
+//
+// Format imposé : AAAA-MM-sem-SS-HH-MM
+//   AAAA  année ISO de la semaine du PLANNING (pas celle du jour de travail)
+//   MM    mois de cette semaine, pris sur son jeudi — jour de référence ISO,
+//         donc le mois auquel la semaine appartient réellement (la semaine 36
+//         de 2026 commence le 31/08 mais est bien la 1re semaine de septembre)
+//   SS    numéro de semaine du planning sur 2 chiffres
+//   HH-MM heure de la sauvegarde
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** Jeudi de la semaine ISO demandée : porte le mois et l'année de la semaine. */
+export function getWeekReferenceDate(weekNumber: number, year: number): Date {
+  return getWeekDates(weekNumber, year)[3];
+}
+
+/**
+ * Nom canonique d'une sauvegarde.
+ * @param weekNumber semaine du planning sauvegardé
+ * @param year       année du planning sauvegardé
+ * @param savedAt    heure de la sauvegarde (par défaut : maintenant)
+ */
+export function buildScheduleName(
+  weekNumber: number,
+  year: number,
+  savedAt: Date = new Date()
+): string {
+  const reference = getWeekReferenceDate(weekNumber, year);
+  return [
+    reference.getFullYear(),
+    pad2(reference.getMonth() + 1),
+    'sem',
+    pad2(weekNumber),
+    pad2(savedAt.getHours()),
+    pad2(savedAt.getMinutes()),
+  ].join('-');
+}
+
+/** Suffixe `-2`, `-3`… toléré pour départager deux sauvegardes de la même minute. */
+const SCHEDULE_NAME_PATTERN = /^\d{4}-\d{2}-sem-\d{2}-\d{2}-\d{2}(-\d+)?$/;
+
+export function isCanonicalScheduleName(name: string): boolean {
+  return SCHEDULE_NAME_PATTERN.test(name);
+}

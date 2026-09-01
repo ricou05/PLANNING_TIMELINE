@@ -12,7 +12,8 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { Schedule, ColorLabel, SavedSchedule, Employee } from '../../types';
-import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules, deleteLocalSchedule } from '../storage/localSchedules';
+import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules, deleteLocalSchedule, renameLocalSchedule } from '../storage/localSchedules';
+import { buildScheduleName } from '../dateUtils';
 import { handleFirebaseError, withTimeout, TIMED_OUT } from './error-handling';
 
 /** Au-delà, on considère que l'écriture est partie dans la file d'attente hors ligne. */
@@ -181,8 +182,27 @@ export const updateSchedule = async (
 
     return { id, updatedAt: now };
   } catch (error) {
+    // Repli sur le stockage local, comme à la création : le message annonçait
+    // « Sauvegarde conservée sur ce PC uniquement » alors que rien n'était
+    // conservé, et le travail était perdu. `remoteId` pointe sur le document
+    // à écraser : la synchronisation le renverra sur ce même id.
+    const localId = `local_${Date.now()}`;
+    await saveLocalSchedule({
+      id: localId,
+      remoteId: id,
+      name,
+      schedules,
+      employees,
+      weekNumber,
+      year,
+      colorLabels,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     return {
-      id,
+      id: localId,
+      updatedAt: now,
       error: handleFirebaseError(error)
     };
   }
@@ -223,13 +243,27 @@ export const getSchedules = async (): Promise<{ schedules: SavedSchedule[], warn
     warnings.push('Erreur lors du chargement des sauvegardes locales');
   }
 
-  // Une sauvegarde locale déjà synchronisée porte le même id Firestore que
-  // sa version en ligne : on ne l'affiche pas deux fois.
-  const remoteIds = new Set(firebaseSchedules.map(s => s.id));
-  const pendingLocals = localSchedules.filter(s => !s.remoteId || !remoteIds.has(s.remoteId));
+  // Une sauvegarde locale peut viser un document déjà présent en ligne :
+  // soit elle a déjà été synchronisée (version en ligne à jour, la copie
+  // locale est un doublon), soit c'est une mise à jour qui n'est pas passée
+  // (elle est alors plus récente et c'est elle qui doit s'afficher).
+  const remoteById = new Map(firebaseSchedules.map(s => [s.id, s]));
+  const supersededRemoteIds = new Set<string>();
+  const millis = (s: SavedSchedule) => s.updatedAt?.toMillis?.() ?? s.createdAt?.toMillis?.() ?? 0;
+
+  const pendingLocals = localSchedules.filter(s => {
+    if (!s.remoteId) return true;
+    const remote = remoteById.get(s.remoteId);
+    if (!remote) return true;
+    if (millis(s) > millis(remote)) {
+      supersededRemoteIds.add(remote.id);
+      return true;
+    }
+    return false;
+  });
 
   // Fusionner et trier toutes les sauvegardes
-  const allSchedules = [...firebaseSchedules, ...pendingLocals]
+  const allSchedules = [...firebaseSchedules.filter(s => !supersededRemoteIds.has(s.id)), ...pendingLocals]
     .sort((a, b) => {
       const dateA = a.createdAt?.toMillis?.() || 0;
       const dateB = b.createdAt?.toMillis?.() || 0;
@@ -255,4 +289,92 @@ export const deleteSchedule = async (id: string): Promise<{ error?: string }> =>
   } catch (error) {
     return { error: handleFirebaseError(error) };
   }
+};
+
+/** Renomme une sauvegarde sans toucher à son contenu. */
+export const renameSchedule = async (id: string, name: string): Promise<{ error?: string }> => {
+  try {
+    if (id.startsWith('local_')) {
+      await renameLocalSchedule(id, name);
+      return {};
+    }
+
+    // `updatedAt` est obligatoire : les règles Firestore l'exigent sur toute
+    // mise à jour, et les sauvegardes les plus anciennes ne le portent pas.
+    const result = await withTimeout(
+      updateDoc(doc(db, 'schedules', id), { name, updatedAt: Timestamp.now() }),
+      WRITE_TIMEOUT_MS
+    );
+
+    if (result === TIMED_OUT) {
+      return { error: 'Hors ligne : le renommage partira dès le retour de la connexion' };
+    }
+
+    return {};
+  } catch (error) {
+    return { error: handleFirebaseError(error) };
+  }
+};
+
+export interface RenameAllResult {
+  renamed: number;
+  /** Sauvegardes déjà au bon format : rien à faire. */
+  skipped: number;
+  failed: number;
+  error?: string;
+}
+
+/**
+ * Aligne toutes les sauvegardes sur le format AAAA-MM-sem-SS-HH-MM.
+ *
+ * Le nom est reconstruit à partir de la semaine et de l'année du PLANNING
+ * (champs `weekNumber` / `year` du document, donc la semaine réellement
+ * planifiée) et de l'heure de sa création. Deux sauvegardes de la même
+ * semaine faites dans la même minute sont départagées par un suffixe.
+ */
+export const renameAllSchedules = async (): Promise<RenameAllResult> => {
+  const { schedules } = await getSchedules();
+
+  // Ordre chronologique : la numérotation des doublons reste stable d'une
+  // exécution à l'autre.
+  const ordered = [...schedules].sort(
+    (a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0)
+  );
+
+  const used = new Set<string>();
+  let renamed = 0;
+  let skipped = 0;
+  let failed = 0;
+  let error: string | undefined;
+
+  for (const schedule of ordered) {
+    if (!schedule.weekNumber || !schedule.year) {
+      skipped++;
+      continue;
+    }
+
+    const savedAt = (schedule.createdAt || schedule.updatedAt)?.toDate?.() || new Date();
+    const base = buildScheduleName(schedule.weekNumber, schedule.year, savedAt);
+
+    let target = base;
+    for (let suffix = 2; used.has(target); suffix++) {
+      target = `${base}-${suffix}`;
+    }
+    used.add(target);
+
+    if (schedule.name === target) {
+      skipped++;
+      continue;
+    }
+
+    const result = await renameSchedule(schedule.id, target);
+    if (result.error) {
+      failed++;
+      error = result.error;
+    } else {
+      renamed++;
+    }
+  }
+
+  return { renamed, skipped, failed, error };
 };

@@ -31,6 +31,13 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),
   }),
+  // Les créneaux du planning portent des champs optionnels (couleur, absence,
+  // repos) remis à `undefined` dès qu'on les efface. Sans cette option,
+  // Firestore refuse tout le document (« Unsupported field value: undefined »,
+  // code invalid-argument) : la sauvegarde en ligne échouait alors que la
+  // sauvegarde locale, passée par JSON, ignorait ces champs. Les propriétés
+  // non définies sont désormais simplement omises, comme en local.
+  ignoreUndefinedProperties: true,
 });
 
 // Authentification (emails de réinitialisation, etc. envoyés en français)

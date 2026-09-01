@@ -1,6 +1,6 @@
 export { db, auth } from './config';
-export { saveSchedule, updateSchedule, getSchedules, deleteSchedule } from './schedules';
-export type { WriteResult, UpdateOptions } from './schedules';
+export { saveSchedule, updateSchedule, getSchedules, deleteSchedule, renameSchedule, renameAllSchedules } from './schedules';
+export type { WriteResult, UpdateOptions, RenameAllResult } from './schedules';
 export { syncLocalSchedules, countLocalSchedules } from './sync';
 export type { SyncResult } from './sync';
 export { saveCloudDraft, loadCloudDraft, clearCloudDraft } from './drafts';
