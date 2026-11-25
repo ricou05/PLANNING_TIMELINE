@@ -105,3 +105,12 @@ table.grid-font-scope {
     }
   }
 }
+
+/* Exports PDF/PNG : html2canvas mesure la ligne de base des polices avec une
+   petite <img> insérée dans un <div> caché, enfant direct de <body>. Le reset
+   Tailwind (img { display: block }) fausse cette mesure et tout le texte des
+   exports était dessiné trop bas (posé en bas des cellules au lieu d'être
+   centré). On rend à cette seule image son affichage en ligne. */
+body > div[style*="visibility: hidden"] > img {
+  display: inline;
+}
