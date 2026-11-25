@@ -6,6 +6,7 @@ import { calculateDailyHours } from '../../utils/scheduleCalculations';
 import { formatHoursHM } from '../../utils/timeUtils';
 import { ReferenceWeekState } from '../../hooks/useReferenceWeek';
 import { weekLabel } from '../../utils/history/reference';
+import { Correspondences, EMPTY_CORRESPONDENCES, canonicalName } from '../../utils/history/correspondences';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SHORT_DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -23,6 +24,8 @@ const Gap: React.FC<{ planned: number; reference: number }> = ({ planned, refere
 
 interface ReferenceRowsProps {
   state: ReferenceWeekState;
+  /** Pour compter une seule fois un prénom écrit de deux façons */
+  correspondences?: Correspondences;
   employees: Employee[];
   schedules: Record<string, Schedule>;
   /** Classe de bordure des cellules, pour s'accorder au tableau hôte */
@@ -36,13 +39,15 @@ interface ReferenceRowsProps {
  * hebdomadaire, dans le même tableau : chaque chiffre de l'an passé tombe
  * sous le jour correspondant de la semaine planifiée.
  */
-const ReferenceRows: React.FC<ReferenceRowsProps> = ({ state, employees, schedules, borderClass, labelColSpan = 1 }) => {
+const ReferenceRows: React.FC<ReferenceRowsProps> = ({ state, correspondences = EMPTY_CORRESPONDENCES, employees, schedules, borderClass, labelColSpan = 1 }) => {
   const { open, refWeek, reference } = state;
   if (!open || !refWeek) return null;
 
   const refDays = refWeek.days.map(summarizeDay);
   const refWeekHours = refDays.reduce((s, d) => s + d.hours, 0);
-  const refStaff = new Set(refWeek.days.flatMap((d) => d.entries.filter((e) => e.hours > 0).map((e) => e.name))).size;
+  const refStaff = new Set(
+    refWeek.days.flatMap((d) => d.entries.filter((e) => e.hours > 0).map((e) => canonicalName(e.name, correspondences)))
+  ).size;
 
   // Prévu : mêmes totaux que la ligne « Totaux » juste au-dessus
   const planned = DAYS.map((day) => ({

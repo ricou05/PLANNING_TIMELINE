@@ -14,6 +14,7 @@ import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 import SchoolHolidayBand from './SchoolHolidayBand';
+import ReferenceTotal, { ReferenceTotalValue } from './History/ReferenceTotal';
 import { getWeekDates } from '../utils/dateUtils';
 import { getPublicHoliday } from '../utils/calendarInfo';
 
@@ -54,6 +55,8 @@ interface WeeklyScheduleProps {
   onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
   /** Lignes ajoutées sous la ligne des totaux (référence N-1) */
   footerRows?: React.ReactNode;
+  /** Heures N-1 du poste de chaque salarié (id → heures), sous son total */
+  referenceTotals?: Record<number, ReferenceTotalValue>;
 }
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
@@ -93,6 +96,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onSetAbsence,
   onTransferDay,
   footerRows,
+  referenceTotals,
 }) => {
   // Dates réelles de la semaine : bandeau des vacances et jours fériés
   const weekDates = getWeekDates(weekNumber, year);
@@ -612,6 +616,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                           </span>
                         )}
                       </div>
+                      <ReferenceTotal value={referenceTotals?.[employee.id]} />
                     </td>
                   </tr>
                   {/* Afternoon row */}

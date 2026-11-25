@@ -112,6 +112,19 @@ service cloud.firestore {
                    request.resource.data.days.size() == 7;
     }
 
+    // ----- Correspondances des saisonniers N / N-1 (qui reprend quel poste) -----
+    // Un document par saison de référence (ex. « 2025-2026 ») : lecture par les
+    // utilisateurs autorisés, modification par les administrateurs.
+    match /correspondances/{saison} {
+      allow read: if isAllowed();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin() &&
+                   saison.matches('^[0-9]{4}-[0-9]{4}$') &&
+                   request.resource.data.keys().hasOnly(['aliases', 'successors', 'updatedAt']) &&
+                   request.resource.data.aliases is map &&
+                   request.resource.data.successors is map;
+    }
+
     // ----- Brouillons de travail (auto-sauvegarde partagée entre PC) -----
     // Un document par utilisateur, nommé avec son UID : chacun ne voit et
     // n'écrit que son propre brouillon, jamais celui d'un collègue.

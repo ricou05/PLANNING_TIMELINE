@@ -71,6 +71,10 @@ C'est cette étape qui ferme réellement l'accès public à la base.
 > - un bloc `match /historique/{weekId}` protège l'historique importé du fichier
 >   Excel (lecture : utilisateurs autorisés ; import : administrateurs).
 >
+> **À refaire après la mise à jour « correspondances N / N-1 » (version 1.17.0)** :
+> un bloc `match /correspondances/{saison}` protège la table des postes des
+> saisonniers (lecture : utilisateurs autorisés ; modification : administrateurs).
+>
 > Ordre conseillé : se connecter à la nouvelle version, confirmer son adresse si
 > l'application le demande, **puis** republier les règles.
 

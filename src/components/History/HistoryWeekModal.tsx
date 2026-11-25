@@ -4,6 +4,8 @@ import { HistoryEntry, HistoryWeek, summarizeDay } from '../../utils/history/typ
 import { formatHoursHM } from '../../utils/timeUtils';
 import SchoolHolidayBand from '../SchoolHolidayBand';
 import { getPublicHoliday } from '../../utils/calendarInfo';
+import { Employee } from '../../types';
+import { Correspondences, canonicalName, resolveSuccessor } from '../../utils/history/correspondences';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -47,10 +49,23 @@ const EntryCell: React.FC<{ entry?: HistoryEntry }> = ({ entry }) => {
 };
 
 // Planning réalisé d'une semaine de l'an passé, en lecture seule
-const HistoryWeekModal: React.FC<{ week: HistoryWeek; onClose: () => void }> = ({ week, onClose }) => {
+interface HistoryWeekModalProps {
+  week: HistoryWeek;
+  employees: Employee[];
+  correspondences: Correspondences;
+  onClose: () => void;
+}
+
+const HistoryWeekModal: React.FC<HistoryWeekModalProps> = ({ week, employees, correspondences, onClose }) => {
   const dates = week.days.map((d) => parseIso(d.date));
-  const names = [...new Set(week.days.flatMap((d) => d.entries.map((e) => e.name)))];
-  const entryOf = (dayIndex: number, name: string) => week.days[dayIndex].entries.find((e) => e.name === name);
+  // Prénoms corrigés (« Isa » et « Isabelle » ne font qu'une ligne)
+  const canon = (name: string) => canonicalName(name, correspondences);
+  const names = [...new Set(week.days.flatMap((d) => d.entries.map((e) => canon(e.name))))];
+  const entryOf = (dayIndex: number, name: string) => {
+    const entries = week.days[dayIndex].entries.filter((e) => canon(e.name) === name);
+    return entries.sort((a, b) => b.hours - a.hours)[0];
+  };
+  const successorOf = (name: string) => resolveSuccessor(name, correspondences, employees).employee;
   const weekHoursOf = (name: string) =>
     week.days.reduce((sum, _d, i) => sum + (entryOf(i, name)?.hours ?? 0), 0);
   // Salariés qui ont travaillé cette semaine d'abord, par heures décroissantes
@@ -105,7 +120,14 @@ const HistoryWeekModal: React.FC<{ week: HistoryWeek; onClose: () => void }> = (
             <tbody>
               {names.map((name) => (
                 <tr key={name}>
-                  <td className="border border-gray-300 px-2 py-1 font-medium text-gray-800">{name}</td>
+                  <td className="border border-gray-300 px-2 py-1 font-medium text-gray-800">
+                    {name}
+                    {successorOf(name) && (
+                      <div className="text-[11px] font-normal text-indigo-700" title="Reprend ce poste cette saison">
+                        → {successorOf(name)!.name}
+                      </div>
+                    )}
+                  </td>
                   {DAY_NAMES.map((day, i) => (
                     <td key={day} className="border border-gray-300 px-1 py-1 text-center text-gray-800">
                       <EntryCell entry={entryOf(i, name)} />

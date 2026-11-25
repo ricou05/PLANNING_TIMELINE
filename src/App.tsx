@@ -8,6 +8,10 @@ import ExcelView from './components/ExcelView';
 import ReferencePanel from './components/History/ReferencePanel';
 import ReferenceRows from './components/History/ReferenceRows';
 import { useReferenceWeek } from './hooks/useReferenceWeek';
+import { useCorrespondences } from './hooks/useCorrespondences';
+import CorrespondencesDialog from './components/History/CorrespondencesDialog';
+import { referenceHoursByEmployee } from './utils/history/correspondences';
+import { prefillFromReference } from './utils/history/prefill';
 import FileMenu from './components/FileMenu/FileMenu';
 import DisplaySettingsMenu, { DisplaySettings, DEFAULT_DISPLAY_SETTINGS } from './components/DisplaySettingsMenu';
 import CSVImport from './components/CSVImport';
@@ -112,6 +116,8 @@ function App() {
   const { templates, saveTemplates } = useShiftTemplates();
   const weekDates = getWeekDates(weekNumber, year);
   const referenceWeek = useReferenceWeek(weekNumber, year);
+  const correspondencesState = useCorrespondences();
+  const [showCorrespondences, setShowCorrespondences] = useState(false);
   const weekKey = weekKeyOf(year, weekNumber);
 
   // Toutes les semaines, y compris celle en cours d'édition (pour l'auto-sauvegarde)
@@ -485,10 +491,31 @@ function App() {
   const renderContent = () => {
     // Assistant N-1 (semaine de référence de l'an passé) : en-tête au-dessus
     // des vues hebdomadaires, chiffres sous la ligne des totaux
-    const referencePanel = <ReferencePanel state={referenceWeek} isAdmin={isAdmin} />;
+    const { correspondences } = correspondencesState;
+    const refWeek = referenceWeek.open ? referenceWeek.refWeek : null;
+    const referencePanel = (
+      <ReferencePanel
+        state={referenceWeek}
+        isAdmin={isAdmin}
+        employees={employees}
+        correspondences={correspondences}
+        onOpenCorrespondences={() => setShowCorrespondences(true)}
+        onPreviewPrefill={() =>
+          refWeek ? prefillFromReference(schedules, refWeek, employees, correspondences) : null
+        }
+        onApplyPrefill={() => {
+          if (!refWeek) return;
+          // Annulable par Ctrl+Z (une seule étape d'historique)
+          setSchedules((prev) => prefillFromReference(prev, refWeek, employees, correspondences).schedules);
+        }}
+      />
+    );
+    // Heures N-1 du poste de chaque salarié, rappelées sous son total
+    const referenceTotals = refWeek ? referenceHoursByEmployee(refWeek, correspondences, employees) : undefined;
     const referenceRows = (labelColSpan: number, borderClass: string) => (
       <ReferenceRows
         state={referenceWeek}
+        correspondences={correspondences}
         employees={employees}
         schedules={schedules}
         labelColSpan={labelColSpan}
@@ -521,6 +548,7 @@ function App() {
           onTransferDay={handleTransferDay}
           displaySettings={displaySettings}
           footerRows={referenceRows(1, 'border border-gray-400')}
+          referenceTotals={referenceTotals}
         />
         </>
       );
@@ -548,6 +576,7 @@ function App() {
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
           footerRows={referenceRows(1, 'border border-gray-300')}
+          referenceTotals={referenceTotals}
         />
         </>
       );
@@ -578,6 +607,7 @@ function App() {
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
           footerRows={referenceRows(2, 'border border-gray-300')}
+          referenceTotals={referenceTotals}
         />
         </>
       );
@@ -826,6 +856,16 @@ function App() {
           {renderContent()}
         </div>
       </main>
+
+      {showCorrespondences && (
+        <CorrespondencesDialog
+          employees={employees}
+          correspondences={correspondencesState.correspondences}
+          onSave={correspondencesState.save}
+          canEdit={isAdmin}
+          onClose={() => setShowCorrespondences(false)}
+        />
+      )}
 
       <ColorManagementModal
         isOpen={isColorModalOpen}

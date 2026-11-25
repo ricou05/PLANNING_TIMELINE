@@ -25,6 +25,7 @@ import { REST_DAY_STRIPES } from '../utils/cellStyles';
 import { exportGridToPDF, ExportDisplaySettings } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
 import SchoolHolidayBand from './SchoolHolidayBand';
+import ReferenceTotal, { ReferenceTotalValue } from './History/ReferenceTotal';
 import { getWeekDates } from '../utils/dateUtils';
 import { getPublicHoliday } from '../utils/calendarInfo';
 
@@ -55,6 +56,8 @@ interface WeeklyGridViewProps {
   displaySettings?: ExportDisplaySettings;
   /** Lignes ajoutées sous la ligne des totaux (référence N-1) */
   footerRows?: React.ReactNode;
+  /** Heures N-1 du poste de chaque salarié (id → heures), sous son total */
+  referenceTotals?: Record<number, ReferenceTotalValue>;
 }
 
 // Absence en attente de choix de portée (journée / matin / après-midi)
@@ -408,6 +411,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
   onTransferDay,
   displaySettings,
   footerRows,
+  referenceTotals,
 }) => {
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
@@ -645,6 +649,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                         </span>
                       )}
                     </div>
+                    <ReferenceTotal value={referenceTotals?.[employee.id]} />
                   </td>
                 </tr>
               );
