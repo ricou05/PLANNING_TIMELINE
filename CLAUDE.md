@@ -22,7 +22,7 @@ Il n'y a **pas de suite de tests**. Pour valider un changement visuel (vues, exp
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` (Node 22, `npm install`, `npm run build`) et publie sur GitHub Pages (`ricou05.github.io/PLANNING_TIMELINE`). `vite.config.ts` met `base` à `/PLANNING_TIMELINE/` uniquement quand `GITHUB_ACTIONS` est défini. Le service worker PWA (`registerType: 'autoUpdate'`) met l'app à jour côté utilisateurs.
 
-La version affichée dans l'app (menu Fichier, page de login) vient de `src/version.ts`.
+**À chaque publication sur `main`, incrémenter la version** dans `src/version.ts` (`APP_VERSION` + `APP_RELEASE_DATE` au format `JJ/MM/AAAA`) — demande explicite de l'utilisateur. Correctif → patch (1.14.0 → 1.14.1), nouvelle fonctionnalité → mineure (1.14.0 → 1.15.0). Cette version est affichée dans l'app (menu Fichier, page de login) ; le champ `version` de `package.json` n'est pas utilisé.
 
 ## Architecture
 

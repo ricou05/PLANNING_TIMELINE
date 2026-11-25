@@ -16,10 +16,22 @@ interface ExportTimelinePDFParams {
   format?: 'pdf' | 'png';
 }
 
+// Gabarit dimensionné pour rester lisible une fois l'image ouverte sur un
+// téléphone (partage WhatsApp) : textes de 11 à 14 px, lignes de 40 px.
 const TIMELINE_PX_PER_HOUR = 70;
-const EMPLOYEE_COL_W = 120;
-const TOTAL_COL_W = 60;
-const ROW_H = 32;
+const EMPLOYEE_COL_W = 130;
+const TOTAL_COL_W = 64;
+const ROW_H = 40;
+const HEADER_H = 34;
+const BAR_FONT_MAX = 13;
+const BAR_FONT_MIN = 7;
+
+// Plus grande police (bornée) pour que « HH:MM - HH:MM » tienne dans la barre :
+// un créneau court garde un texte réduit plutôt que tronqué.
+const barFontSize = (barWidth: number, label: string): number => {
+  const fit = Math.floor((barWidth - 8) / (label.length * 0.6));
+  return Math.max(BAR_FONT_MIN, Math.min(BAR_FONT_MAX, fit));
+};
 
 const REST_DAY_BG = `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 6px)`;
 
@@ -35,7 +47,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   root.style.cssText = `padding:24px 28px;background:#fff;width:${fullW + 56}px;font-family:Arial,Helvetica,sans-serif;`;
 
   const title = document.createElement('div');
-  title.style.cssText = 'margin-bottom:16px;font-size:15px;font-weight:700;text-align:center;color:#111827;';
+  title.style.cssText = 'margin-bottom:16px;font-size:19px;font-weight:700;text-align:center;color:#111827;';
   title.textContent = `Planning ${day} ${date} — Semaine ${weekNumber}, ${year}`;
   root.appendChild(title);
 
@@ -43,11 +55,11 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   wrapper.style.cssText = `width:${fullW}px;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;`;
 
   const headerRow = document.createElement('div');
-  headerRow.style.cssText = `display:flex;background:#f3f4f6;border-bottom:2px solid #9ca3af;height:28px;`;
+  headerRow.style.cssText = `display:flex;background:#f3f4f6;border-bottom:2px solid #9ca3af;height:${HEADER_H}px;`;
 
   const headerName = document.createElement('div');
-  headerName.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
-  headerName.textContent = 'Employe';
+  headerName.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
+  headerName.textContent = 'Employé';
   headerRow.appendChild(headerName);
 
   const headerTimeline = document.createElement('div');
@@ -58,7 +70,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
     const tick = document.createElement('div');
     tick.style.cssText = `position:absolute;left:${offset}px;top:0;bottom:0;display:flex;align-items:center;border-left:1px solid #d1d5db;padding-left:3px;`;
     const label = document.createElement('span');
-    label.style.cssText = 'font-size:9px;font-weight:600;color:#6b7280;';
+    label.style.cssText = 'font-size:11px;font-weight:600;color:#6b7280;';
     label.textContent = minutesToTime(m);
     tick.appendChild(label);
     headerTimeline.appendChild(tick);
@@ -66,7 +78,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   headerRow.appendChild(headerTimeline);
 
   const headerTotal = document.createElement('div');
-  headerTotal.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#374151;border-left:1px solid #d1d5db;`;
+  headerTotal.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#374151;border-left:1px solid #d1d5db;`;
   headerTotal.textContent = 'Total';
   headerRow.appendChild(headerTotal);
 
@@ -83,7 +95,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
     row.style.cssText = `display:flex;height:${ROW_H}px;border-bottom:1px solid #e5e7eb;background:${bgColor};`;
 
     const nameCell = document.createElement('div');
-    nameCell.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#111827;border-right:1px solid #e5e7eb;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px;`;
+    nameCell.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#111827;border-right:1px solid #e5e7eb;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px;box-sizing:border-box;`;
     nameCell.textContent = employee.name;
     row.appendChild(nameCell);
 
@@ -95,7 +107,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
       const restBar = document.createElement('div');
       restBar.style.cssText = `position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;background:${REST_DAY_BG}, #e5e7eb;`;
       const restLabel = document.createElement('span');
-      restLabel.style.cssText = 'font-size:9px;font-weight:700;color:#6b7280;';
+      restLabel.style.cssText = 'font-size:12px;font-weight:700;color:#6b7280;';
       restLabel.innerHTML = `<span style="color:#ef4444;font-weight:900;">✕</span> REPOS`;
       restBar.appendChild(restLabel);
       timelineCell.appendChild(restBar);
@@ -104,7 +116,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
       const absBar = document.createElement('div');
       absBar.style.cssText = `position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;background:${REST_DAY_BG}, #fef3c7;`;
       const absLabel = document.createElement('span');
-      absLabel.style.cssText = 'font-size:9px;font-weight:700;color:#b45309;text-transform:uppercase;';
+      absLabel.style.cssText = 'font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;';
       absLabel.textContent = schedule.absence;
       absBar.appendChild(absLabel);
       timelineCell.appendChild(absBar);
@@ -137,9 +149,10 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
         const bar = document.createElement('div');
         bar.style.cssText = `position:absolute;left:${left}px;width:${width}px;top:4px;height:${ROW_H - 8}px;background:${hex};border:1px solid ${hex};border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
 
+        const label = `${s} - ${e}`;
         const text = document.createElement('span');
-        text.style.cssText = `font-size:8px;font-weight:600;color:${textColor};white-space:nowrap;`;
-        text.textContent = `${s} - ${e}`;
+        text.style.cssText = `font-size:${barFontSize(width, label)}px;font-weight:700;color:${textColor};white-space:nowrap;`;
+        text.textContent = label;
         bar.appendChild(text);
 
         timelineCell.appendChild(bar);
@@ -152,7 +165,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
     row.appendChild(timelineCell);
 
     const totalCell = document.createElement('div');
-    totalCell.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1d4ed8;border-left:1px solid #e5e7eb;`;
+    totalCell.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#1d4ed8;border-left:1px solid #e5e7eb;`;
     totalCell.textContent = formatHours(dailyH);
     row.appendChild(totalCell);
 
@@ -160,10 +173,10 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   });
 
   const footerRow = document.createElement('div');
-  footerRow.style.cssText = `display:flex;height:28px;background:#f3f4f6;border-top:2px solid #9ca3af;`;
+  footerRow.style.cssText = `display:flex;height:${HEADER_H}px;background:#f3f4f6;border-top:2px solid #9ca3af;`;
 
   const footerLabel = document.createElement('div');
-  footerLabel.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
+  footerLabel.style.cssText = `width:${EMPLOYEE_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#374151;border-right:1px solid #d1d5db;`;
   footerLabel.textContent = 'Total';
   footerRow.appendChild(footerLabel);
 
@@ -178,7 +191,7 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
   });
 
   const footerTotal = document.createElement('div');
-  footerTotal.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1d4ed8;border-left:1px solid #d1d5db;`;
+  footerTotal.style.cssText = `width:${TOTAL_COL_W}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#1d4ed8;border-left:1px solid #d1d5db;`;
   footerTotal.textContent = formatHours(dayTotal);
   footerRow.appendChild(footerTotal);
 
@@ -187,14 +200,14 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
 
   if (managedColors.length > 0) {
     const legend = document.createElement('div');
-    legend.style.cssText = 'margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:9px;';
+    legend.style.cssText = 'margin-top:12px;display:flex;gap:18px;flex-wrap:wrap;font-size:12px;';
 
     managedColors.forEach(mc => {
       const item = document.createElement('div');
       item.style.cssText = 'display:flex;align-items:center;gap:4px;';
 
       const swatch = document.createElement('span');
-      swatch.style.cssText = `width:12px;height:12px;border-radius:50%;border:1px solid #d1d5db;display:inline-block;background:${mc.hex};`;
+      swatch.style.cssText = `width:14px;height:14px;border-radius:50%;border:1px solid #d1d5db;display:inline-block;background:${mc.hex};`;
       item.appendChild(swatch);
 
       const label = document.createElement('span');
