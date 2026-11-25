@@ -5,7 +5,6 @@ import { calculateDayTotal } from '../../utils/totalsCalculations';
 import { calculateDailyHours } from '../../utils/scheduleCalculations';
 import { formatHoursHM } from '../../utils/timeUtils';
 import { ReferenceWeekState } from '../../hooks/useReferenceWeek';
-import SchoolHolidayBand from '../SchoolHolidayBand';
 import { weekLabel } from '../../utils/history/reference';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -90,13 +89,6 @@ const ReferenceRows: React.FC<ReferenceRowsProps> = ({ state, employees, schedul
         )),
         <span className="text-indigo-900">Semaine</span>
       )}
-      <SchoolHolidayBand
-        weekDates={reference.dates}
-        borderClass={borderClass}
-        labelColSpan={labelColSpan}
-        emptyBg={N1_BG}
-        noHolidayLabel="Vacances N-1"
-      />
       {row(
         'Heures N-1',
         refDays.map((d) => (d.hours > 0 ? formatHoursHM(d.hours) : '–')),

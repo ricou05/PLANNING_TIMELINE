@@ -3,6 +3,9 @@ import { ChevronDown, ChevronRight, History, Eye, RotateCcw } from 'lucide-react
 import { describeHolidays, rangeLabel, weekLabel, ReferenceCandidate } from '../../utils/history/reference';
 import { ReferenceWeekState } from '../../hooks/useReferenceWeek';
 import HistoryWeekModal from './HistoryWeekModal';
+import SchoolHolidayBand from '../SchoolHolidayBand';
+
+const SHORT_DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 
 const candidateLabel = (c: ReferenceCandidate, suggestedId: string) => {
@@ -102,6 +105,36 @@ const ReferencePanel: React.FC<ReferencePanelProps> = ({ state, isAdmin }) => {
               {isAdmin && ' Pour l’ajouter : menu Ouvrir → Importer l’historique Excel.'}
             </p>
           )}
+
+          {/* Vacances scolaires de la semaine N-1, isolées en haut (les
+              chiffres N-1 sont sous la ligne des totaux du planning) */}
+          <div className="overflow-x-auto mt-1">
+            <table className="border-collapse bg-white w-full min-w-[760px] table-fixed">
+              <colgroup>
+                <col style={{ width: '12%' }} />
+                {reference.dates.map((d) => (
+                  <col key={d.getTime()} />
+                ))}
+                <col style={{ width: '9%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="border border-gray-300 px-1 py-0 text-left text-[11px] font-semibold text-indigo-900 whitespace-nowrap">
+                    Vacances N-1
+                  </th>
+                  {reference.dates.map((d, i) => (
+                    <th key={i} className="border border-gray-300 px-1 py-0 text-center text-[11px] font-semibold text-indigo-900">
+                      {SHORT_DAYS[i]} {d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                    </th>
+                  ))}
+                  <th className="border border-gray-300 px-1 py-0 text-center text-[11px] font-semibold text-indigo-900">
+                    {weekLabel(reference)}
+                  </th>
+                </tr>
+                <SchoolHolidayBand weekDates={reference.dates} borderClass="border border-gray-300" />
+              </thead>
+            </table>
+          </div>
         </>
       )}
 
