@@ -7,6 +7,12 @@ export interface PDFExportOptions {
   showTotalColumn: boolean;
   /** 'pdf' (défaut) pour impression, 'png' pour partage (WhatsApp, e-mail…) */
   format?: 'pdf' | 'png';
+  /**
+   * true : les lignes s'étirent pour occuper toute la hauteur de la page A4
+   * (ancien comportement). false (défaut) : hauteur de ligne plafonnée à celle
+   * de l'écran, le tableau garde les proportions de la vue en ligne.
+   */
+  fillPage?: boolean;
 }
 
 // Réglages d'affichage en cours (menu Paramètres) à reporter sur l'export
@@ -41,6 +47,33 @@ const LEGEND_H = 32;
 const COL_EMPLOYEE = 100;
 const COL_PERIOD = 42;
 const COL_TOTAL = 56;
+
+// Hauteurs de ligne maximales (px), alignées sur la vue en ligne
+const MAX_ROW_H_GRID = 54;    // vue 1 grille : min-h 52 px à l'écran
+const MAX_ROW_H_VISUAL = 54;  // vue 2 : min-h 48 px + marges
+const MAX_ROW_H_CLASSIC = 32; // vue classique : 64 px pour 2 demi-lignes
+
+// Hauteur de ligne : la place disponible sur une page A4 répartie entre les
+// lignes, plafonnée à la hauteur écran sauf si l'on veut remplir la page.
+// Avec beaucoup d'employés, les lignes rétrécissent pour tenir sur une page.
+const computeRowH = (
+  availH: number,
+  numRows: number,
+  maxRowH: number,
+  fillPage: boolean,
+): number => {
+  const fitH = Math.floor(availH / numRows);
+  return fillPage ? fitH : Math.min(maxRowH, fitH);
+};
+
+// Conteneur de rendu : largeur A4 fixe (même échelle quel que soit le contenu) ;
+// hauteur A4 imposée seulement en mode « remplir la page », sinon la hauteur
+// suit le contenu (PNG rogné, pas de blanc inutile).
+const createContainer = (fillPage: boolean): HTMLElement => {
+  const container = document.createElement('div');
+  container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;${fillPage ? `min-height:${A4_H}px;` : ''}font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
+  return container;
+};
 
 const getColorHex = (managedColors: ManagedColor[], colorName?: string): string | null => {
   const mc = findManagedColor(managedColors, colorName);
@@ -89,11 +122,11 @@ const createPDFTable = ({
   const tableAvailH =
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
   const numRows = employees.length * 2 + 2; // header + footer
-  const rowH = Math.floor(tableAvailH / numRows);
+  const fillPage = options?.fillPage === true;
+  const rowH = computeRowH(tableAvailH, numRows, MAX_ROW_H_CLASSIC, fillPage);
   const fontSize = Math.min(12, Math.max(8, Math.floor(rowH * 0.38)));
 
-  const container = document.createElement('div');
-  container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
+  const container = createContainer(fillPage);
 
   const title = document.createElement('div');
   title.style.cssText = 'margin-bottom:10px;font-size:16px;font-weight:700;text-align:center;color:#111827;';
@@ -351,18 +384,18 @@ const createGridPDFTable = ({
   const tableAvailH =
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
   const numRows = employees.length + 2; // header + footer
-  const rowH = Math.floor(tableAvailH / numRows);
+  const fillPage = options?.fillPage === true;
+  const rowH = computeRowH(tableAvailH, numRows, MAX_ROW_H_GRID, fillPage);
   // Réglages d'affichage en cours reportés sur l'export ; la police est
   // bornée à la hauteur d'une demi-ligne (le format A4 étant fixe) pour
   // que le texte ne soit jamais tronqué.
   const fontScale = (display?.fontScale ?? 100) / 100;
   const borderW = display?.borderWidth ?? 1;
   const halfRowH = Math.floor(rowH / 2);
-  const fontSize = Math.min(halfRowH - 4, Math.round(Math.min(14, Math.max(9, Math.floor(rowH * 0.22))) * fontScale));
-  const timeFontSize = Math.min(halfRowH - 4, Math.round(Math.min(13, Math.max(8, Math.floor(rowH * 0.21))) * fontScale));
+  const fontSize = Math.min(halfRowH - 4, Math.round(Math.min(14, Math.max(9, Math.floor(rowH * 0.26))) * fontScale));
+  const timeFontSize = Math.min(halfRowH - 4, Math.round(Math.min(13, Math.max(8, Math.floor(rowH * 0.24))) * fontScale));
 
-  const container = document.createElement('div');
-  container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
+  const container = createContainer(fillPage);
 
   const title = document.createElement('div');
   title.style.cssText = 'margin-bottom:10px;font-size:16px;font-weight:700;text-align:center;color:#111827;';
@@ -591,12 +624,12 @@ const createVisualPDFTable = ({
   const tableAvailH =
     A4_H - 2 * PAD_V - TITLE_H - 10 - (hasLegend ? LEGEND_H : 0);
   const numRows = employees.length + 2; // header + footer
-  const rowH = Math.floor(tableAvailH / numRows);
-  const fontSize = Math.min(13, Math.max(9, Math.floor(rowH * 0.22)));
-  const blockFontSize = Math.min(12, Math.max(9, Math.floor(rowH * 0.20)));
+  const fillPage = options?.fillPage === true;
+  const rowH = computeRowH(tableAvailH, numRows, MAX_ROW_H_VISUAL, fillPage);
+  const fontSize = Math.min(13, Math.max(9, Math.floor(rowH * 0.24)));
+  const blockFontSize = Math.min(12, Math.max(9, Math.floor(rowH * 0.22)));
 
-  const container = document.createElement('div');
-  container.style.cssText = `padding:${PAD_V}px ${PAD_H}px;background:#fff;width:${A4_W}px;min-height:${A4_H}px;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;`;
+  const container = createContainer(fillPage);
 
   const title = document.createElement('div');
   title.style.cssText = 'margin-bottom:10px;font-size:16px;font-weight:700;text-align:center;color:#111827;';
@@ -824,8 +857,9 @@ const saveCanvasAsPDF = async (canvas: HTMLCanvasElement, filename: string): Pro
     imgWidth = imgHeight * ratio;
   }
 
+  // Centré horizontalement, calé en haut de page (comme un document imprimé)
   const x = (pageWidth - imgWidth) / 2;
-  const y = (pageHeight - imgHeight) / 2;
+  const y = marginY;
 
   // PNG sans perte : texte net sur les aplats de couleur. La compression 'SLOW'
   // (flate) est indispensable : sans elle jsPDF intègre l'image non compressée

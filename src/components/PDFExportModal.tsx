@@ -5,7 +5,20 @@ export interface PDFExportOptions {
   showTotalColumn: boolean;
   /** 'pdf' (défaut) pour impression, 'png' pour partage (WhatsApp, e-mail…) */
   format?: 'pdf' | 'png';
+  /** Étire les lignes pour occuper toute la hauteur de la page A4 */
+  fillPage?: boolean;
 }
+
+// Choix « Remplir toute la page » mémorisé d'un export à l'autre
+const FILL_PAGE_KEY = 'exportFillPage';
+
+const readFillPage = (): boolean => {
+  try {
+    return localStorage.getItem(FILL_PAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 interface PDFExportModalProps {
   onConfirm: (options: PDFExportOptions) => void;
@@ -15,6 +28,16 @@ interface PDFExportModalProps {
 const PDFExportModal: React.FC<PDFExportModalProps> = ({ onConfirm, onCancel }) => {
   const [showTotalColumn, setShowTotalColumn] = useState(true);
   const [format, setFormat] = useState<'pdf' | 'png'>('pdf');
+  const [fillPage, setFillPage] = useState<boolean>(readFillPage);
+
+  const handleConfirm = () => {
+    try {
+      localStorage.setItem(FILL_PAGE_KEY, String(fillPage));
+    } catch {
+      // stockage indisponible (navigation privée…) : le choix n'est simplement pas mémorisé
+    }
+    onConfirm({ showTotalColumn, format, fillPage });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -80,6 +103,24 @@ const PDFExportModal: React.FC<PDFExportModalProps> = ({ onConfirm, onCancel }) 
               </span>
             </label>
           </div>
+
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Mise en page</p>
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={fillPage}
+                onChange={e => setFillPage(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 cursor-pointer"
+              />
+              <span className="text-sm text-gray-700 group-hover:text-gray-900">
+                Remplir toute la page
+                <span className="block text-[11px] text-gray-400">
+                  Étire les lignes sur la hauteur de la feuille A4. Décoché : mêmes proportions qu'à l'écran.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Footer */}
@@ -91,7 +132,7 @@ const PDFExportModal: React.FC<PDFExportModalProps> = ({ onConfirm, onCancel }) 
             Annuler
           </button>
           <button
-            onClick={() => onConfirm({ showTotalColumn, format })}
+            onClick={handleConfirm}
             className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Download className="w-4 h-4" />
