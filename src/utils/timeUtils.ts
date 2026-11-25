@@ -1,7 +1,7 @@
 // Time constants
 export const TIME_CONSTRAINTS = {
   MIN_TIME: '06:30',
-  MAX_TIME: '20:30',
+  MAX_TIME: '20:00',
   NOON_TIME: '12:00'
 };
 
