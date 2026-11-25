@@ -9,7 +9,7 @@ import DraggableEmployeeList from './DraggableEmployeeList';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
-import { formatHours } from '../utils/timeUtils';
+import { formatHours, TIME_CONSTRAINTS } from '../utils/timeUtils';
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
@@ -314,8 +314,8 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
               });
             }}
             placeholder=":"
-            minTime="06:30"
-            maxTime="20:00"
+            minTime={TIME_CONSTRAINTS.MIN_TIME}
+            maxTime={TIME_CONSTRAINTS.MAX_TIME}
           />
           <span className="text-black font-medium">-</span>
           <TimeInput
@@ -327,8 +327,8 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
               });
             }}
             placeholder=":"
-            minTime="06:30"
-            maxTime="20:00"
+            minTime={TIME_CONSTRAINTS.MIN_TIME}
+            maxTime={TIME_CONSTRAINTS.MAX_TIME}
           />
           {hasTime && (
             <button

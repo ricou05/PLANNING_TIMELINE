@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { timeToMinutes } from '../utils/timeUtils';
+import { timeToMinutes, TIME_CONSTRAINTS } from '../utils/timeUtils';
 
 interface TimeInputProps {
   value: string;
@@ -13,8 +13,8 @@ const TimeInput: React.FC<TimeInputProps> = ({
   value,
   onChange,
   placeholder,
-  minTime = '06:30',
-  maxTime = '20:00'
+  minTime = TIME_CONSTRAINTS.MIN_TIME,
+  maxTime = TIME_CONSTRAINTS.MAX_TIME
 }) => {
   const [inputValue, setInputValue] = useState(value);
 

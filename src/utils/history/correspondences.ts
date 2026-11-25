@@ -29,8 +29,15 @@ const firstNameKey = (s: string) => nameKey(s).split(' ')[0] ?? '';
 /** Prénom N-1 corrigé (« Isa » → « Isabelle » si la table le dit) */
 export const canonicalName = (name: string, c: Correspondences): string => c.aliases[name] || name;
 
-const findEmployee = (employees: Employee[], name: string): Employee | null =>
-  employees.find((e) => nameKey(e.name) === nameKey(name)) ?? null;
+// Nom exact ; à défaut, si le nom retenu n'est qu'un prénom (« Gerome »), le
+// seul salarié qui porte ce prénom (« Gerome Gaiddon », après ajout du nom)
+const findEmployee = (employees: Employee[], name: string): Employee | null => {
+  const exact = employees.find((e) => nameKey(e.name) === nameKey(name));
+  if (exact) return exact;
+  if (nameKey(name).includes(' ')) return null;
+  const sameFirst = employees.filter((e) => firstNameKey(e.name) === firstNameKey(name));
+  return sameFirst.length === 1 ? sameFirst[0] : null;
+};
 
 export interface ResolvedSuccessor {
   employee: Employee | null;
@@ -49,9 +56,14 @@ export function resolveSuccessor(n1Name: string, c: Correspondences, employees: 
     const target = c.successors[canon];
     return { employee: target ? findEmployee(employees, target) : null, auto: false };
   }
-  const explicitTargets = new Set(Object.values(c.successors).filter(Boolean).map(nameKey));
+  // Salariés qui ont déjà un poste choisi à la main
+  const explicitIds = new Set(
+    Object.values(c.successors)
+      .filter(Boolean)
+      .map((target) => findEmployee(employees, target)?.id)
+  );
   const matches = employees.filter(
-    (e) => firstNameKey(e.name) === firstNameKey(canon) && !explicitTargets.has(nameKey(e.name))
+    (e) => firstNameKey(e.name) === firstNameKey(canon) && !explicitIds.has(e.id)
   );
   return { employee: matches.length === 1 ? matches[0] : null, auto: true };
 }
