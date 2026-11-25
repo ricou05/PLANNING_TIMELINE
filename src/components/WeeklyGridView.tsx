@@ -53,6 +53,8 @@ interface WeeklyGridViewProps {
   onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
   /** Réglages d'affichage en cours (menu Paramètres), reportés sur l'export PDF/PNG */
   displaySettings?: ExportDisplaySettings;
+  /** Lignes ajoutées sous la ligne des totaux (référence N-1) */
+  footerRows?: React.ReactNode;
 }
 
 // Absence en attente de choix de portée (journée / matin / après-midi)
@@ -405,6 +407,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
   onSetAbsence,
   onTransferDay,
   displaySettings,
+  footerRows,
 }) => {
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
@@ -667,6 +670,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                 })()}
               </td>
             </tr>
+            {footerRows}
           </tbody>
         </table>
       </div>

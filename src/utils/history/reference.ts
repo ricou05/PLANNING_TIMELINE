@@ -88,3 +88,13 @@ export const describeHolidays = (dates: Date[]): string =>
     const n = dates.filter((d) => zonesOn(d).has(zone)).length;
     return `${zone} ${n > 0 ? `${n} j` : '—'}`;
   }).join(' · ');
+
+const shortDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+/** « 9 févr. → 15 févr. 2026 » */
+export const rangeLabel = (dates: Date[]): string =>
+  `${shortDate(dates[0])} → ${shortDate(dates[6])} ${dates[6].getFullYear()}`;
+
+/** « S07 2026 » */
+export const weekLabel = (c: { week: number; year: number }): string =>
+  `S${String(c.week).padStart(2, '0')} ${c.year}`;

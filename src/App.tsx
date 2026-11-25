@@ -6,6 +6,8 @@ import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
 import ReferencePanel from './components/History/ReferencePanel';
+import ReferenceRows from './components/History/ReferenceRows';
+import { useReferenceWeek } from './hooks/useReferenceWeek';
 import FileMenu from './components/FileMenu/FileMenu';
 import DisplaySettingsMenu, { DisplaySettings, DEFAULT_DISPLAY_SETTINGS } from './components/DisplaySettingsMenu';
 import CSVImport from './components/CSVImport';
@@ -109,6 +111,7 @@ function App() {
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const { templates, saveTemplates } = useShiftTemplates();
   const weekDates = getWeekDates(weekNumber, year);
+  const referenceWeek = useReferenceWeek(weekNumber, year);
   const weekKey = weekKeyOf(year, weekNumber);
 
   // Toutes les semaines, y compris celle en cours d'édition (pour l'auto-sauvegarde)
@@ -480,14 +483,16 @@ function App() {
   const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
-    // Assistant N-1 (semaine de référence de l'an passé), au-dessus des Vues 1 et 2
-    const referencePanel = (
-      <ReferencePanel
-        weekNumber={weekNumber}
-        year={year}
+    // Assistant N-1 (semaine de référence de l'an passé) : en-tête au-dessus
+    // des vues hebdomadaires, chiffres sous la ligne des totaux
+    const referencePanel = <ReferencePanel state={referenceWeek} isAdmin={isAdmin} />;
+    const referenceRows = (labelColSpan: number, borderClass: string) => (
+      <ReferenceRows
+        state={referenceWeek}
         employees={employees}
         schedules={schedules}
-        isAdmin={isAdmin}
+        labelColSpan={labelColSpan}
+        borderClass={borderClass}
       />
     );
 
@@ -515,6 +520,7 @@ function App() {
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
           displaySettings={displaySettings}
+          footerRows={referenceRows(1, 'border border-gray-400')}
         />
         </>
       );
@@ -541,11 +547,14 @@ function App() {
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
+          footerRows={referenceRows(1, 'border border-gray-300')}
         />
         </>
       );
     } else if (activeTab === 'weekly') {
       return (
+        <>
+        {referencePanel}
         <WeeklySchedule
           employees={employees}
           days={DAYS}
@@ -568,7 +577,9 @@ function App() {
           onApplyTemplate={handleApplyTemplate}
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
+          footerRows={referenceRows(2, 'border border-gray-300')}
         />
+        </>
       );
     } else if (activeTab === 'excel') {
       return (

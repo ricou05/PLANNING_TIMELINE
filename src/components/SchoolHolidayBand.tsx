@@ -16,6 +16,12 @@ interface SchoolHolidayBandProps {
   borderClass: string;
   /** Nombre de colonnes après les jours (colonne Total) */
   trailingColumns?: number;
+  /** Nombre de colonnes avant les jours (colonne des noms, + « PER. » en Hebdo 2) */
+  labelColSpan?: number;
+  /** Fond des cellules sans vacances (blanc par défaut) */
+  emptyBg?: string;
+  /** Texte de la colonne de gauche quand aucune zone n'est en vacances */
+  noHolidayLabel?: string;
 }
 
 // Texte qui ne fait jamais élargir la colonne (largeur nulle, étiré à 100 %)
@@ -29,18 +35,26 @@ const CellText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
  * Bandeau fin des vacances scolaires, une ligne par zone (A, B, C), placé
  * au-dessus de la ligne des jours. Rendu en lignes <tr> à insérer dans <thead>.
  */
-const SchoolHolidayBand: React.FC<SchoolHolidayBandProps> = ({ weekDates, borderClass, trailingColumns = 1 }) => {
+const SchoolHolidayBand: React.FC<SchoolHolidayBandProps> = ({
+  weekDates,
+  borderClass,
+  trailingColumns = 1,
+  labelColSpan = 1,
+  emptyBg = '#ffffff',
+  noHolidayLabel = 'Vacances',
+}) => {
   const cell = `${borderClass} p-0 px-1 text-[10px] leading-[14px] h-[15px] font-normal`;
-  const labelCell = `${cell} sticky left-0 z-10 bg-white text-left text-gray-600`;
-  const trailing = trailingColumns > 0 && <th className={`${cell} bg-white`} colSpan={trailingColumns} />;
+  const labelCell = `${cell} sticky left-0 z-10 text-left text-gray-600`;
+  const bg = { backgroundColor: emptyBg };
+  const trailing = trailingColumns > 0 && <th className={cell} style={bg} colSpan={trailingColumns} />;
 
   if (!weekHasSchoolHolidays(weekDates)) {
     return (
       <tr>
-        <th className={labelCell}>
-          <CellText>Vacances</CellText>
+        <th className={labelCell} style={bg} colSpan={labelColSpan}>
+          <CellText>{noHolidayLabel}</CellText>
         </th>
-        <th className={`${cell} bg-white text-center italic text-gray-400`} colSpan={weekDates.length}>
+        <th className={`${cell} text-center italic text-gray-400`} style={bg} colSpan={weekDates.length}>
           <CellText>Pas de vacances scolaires</CellText>
         </th>
         {trailing}
@@ -57,6 +71,8 @@ const SchoolHolidayBand: React.FC<SchoolHolidayBandProps> = ({ weekDates, border
           <tr key={zone}>
             <th
               className={labelCell}
+              style={bg}
+              colSpan={labelColSpan}
               title={isLocal ? 'Zone B : académie de Nice (zone du magasin)' : `Zone ${zone}`}
             >
               <CellText>
@@ -78,7 +94,7 @@ const SchoolHolidayBand: React.FC<SchoolHolidayBandProps> = ({ weekDates, border
                   <CellText>{segment.span > 1 ? segment.holiday.label : segment.holiday.shortLabel}</CellText>
                 </th>
               ) : (
-                <th key={segment.start} className={`${cell} bg-white`} />
+                <th key={segment.start} className={cell} style={bg} />
               )
             )}
             {trailing}

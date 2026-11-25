@@ -13,6 +13,9 @@ import { formatHours } from '../utils/timeUtils';
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import { exportToPDF } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
+import SchoolHolidayBand from './SchoolHolidayBand';
+import { getWeekDates } from '../utils/dateUtils';
+import { getPublicHoliday } from '../utils/calendarInfo';
 
 import {
   isPlanningDrag,
@@ -49,6 +52,8 @@ interface WeeklyScheduleProps {
   onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
   /** Déplace (ou copie) toute une journée d'un salarié vers un autre */
   onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
+  /** Lignes ajoutées sous la ligne des totaux (référence N-1) */
+  footerRows?: React.ReactNode;
 }
 
 const REST_DAY_STRIPES = `repeating-linear-gradient(
@@ -87,7 +92,12 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
   onApplyTemplate,
   onSetAbsence,
   onTransferDay,
+  footerRows,
 }) => {
+  // Dates réelles de la semaine : bandeau des vacances et jours fériés
+  const weekDates = getWeekDates(weekNumber, year);
+  const publicHolidays = weekDates.map(getPublicHoliday);
+
   const [dragOverEmployeeIndex, setDragOverEmployeeIndex] = useState<number | null>(null);
   const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState('bleu');
@@ -476,6 +486,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
             <col style={{ width: '80px' }} />
           </colgroup>
           <thead>
+            <SchoolHolidayBand weekDates={weekDates} borderClass="border border-gray-300" labelColSpan={2} />
             <tr className="bg-gray-50">
               <th className="border-b-4 border-black p-2 font-bold border-r-4 border-r-black">EMPLOYE</th>
               <th className="border-b-4 border-black p-1 font-bold border-r-4 border-r-black text-xs">PER.</th>
@@ -484,6 +495,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                   <div className="text-center">
                     <div className="font-bold text-sm">{day}</div>
                     <div className="text-xs text-gray-500">{dates[index]}</div>
+                    {publicHolidays[index] && (
+                      <div className="text-[11px] font-bold text-red-700" title={`Jour férié : ${publicHolidays[index]}`}>
+                        Férié · {publicHolidays[index]}
+                      </div>
+                    )}
                     <div className="flex items-center justify-center gap-1 mt-0.5">
                       <button
                         onClick={() => onCopyDay(day)}
@@ -641,6 +657,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({
                 {formatHours(calculateGrandTotal(schedules, employees))}
               </td>
             </tr>
+            {footerRows}
           </tbody>
         </table>
       </div>

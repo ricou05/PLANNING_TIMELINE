@@ -57,6 +57,8 @@ interface WeeklyVisualViewProps {
   onSetAbsence: (employeeId: number, day: string, label: string | null, period?: AbsencePeriod) => void;
   /** Déplace (ou copie) toute une journée d'un salarié vers un autre */
   onTransferDay: (source: DayRef, target: DayRef, mode: TransferMode) => void;
+  /** Lignes ajoutées sous la ligne des totaux (référence N-1) */
+  footerRows?: React.ReactNode;
 }
 
 // Bloc d'absence sur une demi-journée (fond ambre hachuré, libellé + retrait)
@@ -424,6 +426,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   onApplyTemplate,
   onSetAbsence,
   onTransferDay,
+  footerRows,
 }) => {
   // Dates réelles de la semaine : bandeau des vacances et jours fériés
   const weekDates = getWeekDates(weekNumber, year);
@@ -678,6 +681,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                 })()}
               </td>
             </tr>
+            {footerRows}
           </tbody>
         </table>
       </div>
