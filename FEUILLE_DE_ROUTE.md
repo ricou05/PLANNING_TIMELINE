@@ -38,3 +38,14 @@ Firestore `schedules`, une sauvegarde = une semaine `weekNumber`/`year`).
 « réalisé » qui remplace le prévu, ou deux versions conservées ; qui peut
 valider un réalisé (admin seulement ?) ; faut-il des règles Firestore
 supplémentaires (nouveau champ contrôlé dans `schedules`).
+
+## À revoir — Liste des salariés par période
+
+La fonction « Coller une liste de salariés » (1.18.0) a été retirée en 1.18.1 :
+la liste des salariés de l'application est **commune à toutes les semaines**,
+donc renommer « Isa » en nom complet ou réutiliser un « Employe N » modifiait
+aussi les plannings des semaines passées. Besoin réel : n'appliquer la liste
+du personnel de la saison qu'aux semaines **à venir**, au moment de reprendre
+un planning N-1 (correspondances N / N-1). Piste : une liste de salariés propre
+à chaque semaine (ou à chaque saison), copiée de la semaine précédente, au lieu
+d'une liste unique.

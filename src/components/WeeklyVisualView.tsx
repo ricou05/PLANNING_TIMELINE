@@ -5,7 +5,7 @@ import AbsencePeriodChooser from './AbsencePeriodChooser';
 import { findManagedColor, getTextColorForHex } from '../utils/colorUtils';
 import { calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal, calculateGrandTotal } from '../utils/totalsCalculations';
-import { formatHours, TIME_CONSTRAINTS } from '../utils/timeUtils';
+import { formatHours } from '../utils/timeUtils';
 import { getEmployeeComplianceIssues } from '../utils/compliance';
 import ColorPicker from './ColorPicker';
 import ShiftToolsBar from './ShiftToolsBar';
@@ -142,16 +142,16 @@ export const EditableShift: React.FC<EditableShiftProps> = ({
           value={start}
           onChange={onStartChange}
           placeholder=":"
-          minTime={TIME_CONSTRAINTS.MIN_TIME}
-          maxTime={TIME_CONSTRAINTS.MAX_TIME}
+          minTime="06:30"
+          maxTime="20:00"
         />
         <span className="text-xs font-bold" style={textColor ? { color: textColor } : {}}>-</span>
         <TimeInput
           value={end}
           onChange={onEndChange}
           placeholder=":"
-          minTime={TIME_CONSTRAINTS.MIN_TIME}
-          maxTime={TIME_CONSTRAINTS.MAX_TIME}
+          minTime="06:30"
+          maxTime="20:00"
         />
       </div>
     </div>

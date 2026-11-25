@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus, ClipboardList } from 'lucide-react';
+import { Calendar, FileSpreadsheet, Download, Plus, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Undo2, Redo2, CopyPlus } from 'lucide-react';
 import WeeklySchedule from './components/WeeklySchedule';
 import WeeklyGridView from './components/WeeklyGridView';
 import WeeklyVisualView from './components/WeeklyVisualView';
@@ -10,7 +10,6 @@ import ReferenceRows from './components/History/ReferenceRows';
 import { useReferenceWeek } from './hooks/useReferenceWeek';
 import { useCorrespondences } from './hooks/useCorrespondences';
 import CorrespondencesDialog from './components/History/CorrespondencesDialog';
-import EmployeeListDialog from './components/EmployeeListDialog';
 import { referenceHoursByEmployee } from './utils/history/correspondences';
 import { prefillFromReference } from './utils/history/prefill';
 import FileMenu from './components/FileMenu/FileMenu';
@@ -119,7 +118,6 @@ function App() {
   const referenceWeek = useReferenceWeek(weekNumber, year);
   const correspondencesState = useCorrespondences();
   const [showCorrespondences, setShowCorrespondences] = useState(false);
-  const [showEmployeeList, setShowEmployeeList] = useState(false);
   const weekKey = weekKeyOf(year, weekNumber);
 
   // Toutes les semaines, y compris celle en cours d'édition (pour l'auto-sauvegarde)
@@ -678,6 +676,10 @@ function App() {
             : { ...weeksRef.current, [weekKey]: schedules };
           resetSchedules(savedSchedule.schedules);
           setEmployees(savedSchedule.employees);
+          // L'ordre des salariés de la sauvegarde devient l'ordre retenu sur ce
+          // poste (sinon un ordre plus récent, mémorisé à part, le remplacerait
+          // au prochain chargement)
+          saveEmployeeOrder(savedSchedule.employees);
           setWeekNumber(savedSchedule.weekNumber);
           setYear(savedSchedule.year);
         }}
@@ -769,13 +771,6 @@ function App() {
             className="flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all duration-150"
           >
             <Plus className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowEmployeeList(true)}
-            title="Coller une liste de salariés (noms complets)"
-            className="flex items-center justify-center w-7 h-7 bg-white text-gray-600 rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150"
-          >
-            <ClipboardList className="w-4 h-4" />
           </button>
         </div>
 
@@ -879,18 +874,6 @@ function App() {
           {renderContent()}
         </div>
       </main>
-
-      {showEmployeeList && (
-        <EmployeeListDialog
-          employees={employees}
-          onApply={(list, reordered) => {
-            setEmployees(list);
-            setEmployeeCount(list.length);
-            if (reordered) saveEmployeeOrder(list);
-          }}
-          onClose={() => setShowEmployeeList(false)}
-        />
-      )}
 
       {showCorrespondences && (
         <CorrespondencesDialog
