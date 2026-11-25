@@ -67,6 +67,7 @@ export const saveSchedule = async (
   year: number,
   colorLabels: ColorLabel[]
 ): Promise<WriteResult> => {
+  invalidateSavesCache();
   // L'identifiant est réservé côté client : si l'écriture n'aboutit pas et
   // qu'on bascule en local, la synchronisation réutilisera ce même id et ne
   // créera donc pas de doublon.
@@ -129,6 +130,7 @@ export const updateSchedule = async (
   colorLabels: ColorLabel[],
   options: UpdateOptions = {}
 ): Promise<WriteResult> => {
+  invalidateSavesCache();
   const now = Timestamp.now();
 
   try {
@@ -377,4 +379,34 @@ export const renameAllSchedules = async (): Promise<RenameAllResult> => {
   }
 
   return { renamed, skipped, failed, error };
+};
+
+// Liste des sauvegardes lue une fois par session pour retrouver celle d'une
+// semaine (vidée après chaque enregistrement)
+let savesCache: Promise<SavedSchedule[]> | null = null;
+
+export const invalidateSavesCache = (): void => {
+  savesCache = null;
+};
+
+const millisOf = (s: SavedSchedule): number => {
+  const t = (s.updatedAt || s.createdAt) as { toMillis?: () => number } | undefined;
+  return typeof t?.toMillis === 'function' ? t.toMillis() : 0;
+};
+
+/** Sauvegarde la plus récente d'une semaine donnée, ou null s'il n'y en a pas. */
+export const findLatestSaveForWeek = async (weekNumber: number, year: number): Promise<SavedSchedule | null> => {
+  try {
+    savesCache ??= getSchedules().then((r) => r.schedules);
+    const saves = await savesCache;
+    const forWeek = saves.filter(
+      (s) => s.weekNumber === weekNumber && s.year === year && s.employees?.length && s.schedules
+    );
+    if (forWeek.length === 0) return null;
+    return forWeek.sort((a, b) => millisOf(b) - millisOf(a))[0];
+  } catch (error) {
+    console.warn('Recherche de la sauvegarde de la semaine impossible :', error);
+    savesCache = null;
+    return null;
+  }
 };

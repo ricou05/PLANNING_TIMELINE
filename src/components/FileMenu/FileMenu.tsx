@@ -33,7 +33,7 @@ export interface SaveData {
 export type WeeksMap = Record<string, Record<string, Schedule>>;
 
 interface FileMenuProps {
-  onRestore: (savedSchedule: SavedSchedule, weeks?: WeeksMap) => void;
+  onRestore: (savedSchedule: SavedSchedule, weeks?: WeeksMap, weekEmployees?: Record<string, Employee[]>) => void;
   onSave: () => Promise<SaveData>;
   onNewSchedule?: () => void;
   /**
@@ -312,12 +312,19 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const handleSave = (name: string, scheduleToUpdate?: SavedSchedule) =>
     performSave(name, scheduleToUpdate || null);
 
+  // La sauvegarde ouverte ne correspond qu'à SA semaine : après un changement
+  // de semaine, « Enregistrer » ne doit pas l'écraser avec une autre semaine.
+  const openSchedule =
+    selectedSchedule && selectedSchedule.weekNumber === weekNumber && selectedSchedule.year === year
+      ? selectedSchedule
+      : null;
+
   const handleQuickSave = () => {
-    if (!selectedSchedule) {
+    if (!openSchedule) {
       setShowSaveAsDialog(true);
       return;
     }
-    return performSave(selectedSchedule.name, selectedSchedule);
+    return performSave(openSchedule.name, openSchedule);
   };
 
   const handleForceSave = () => {
@@ -346,7 +353,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
       createdAt: Timestamp.now(),
     };
     setSelectedSchedule(null);
-    onRestore(pseudoSchedule, autoSave.weeks);
+    onRestore(pseudoSchedule, autoSave.weeks, autoSave.weekEmployees);
     setShowRestoreDialog(false);
     setSuccess('Brouillon auto-sauvegarde restaure');
   };
@@ -364,7 +371,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
       createdAt: Timestamp.now(),
     };
     setSelectedSchedule(null);
-    onRestore(pseudoSchedule, incomingDraft.weeks);
+    onRestore(pseudoSchedule, incomingDraft.weeks, incomingDraft.weekEmployees);
     if (incomingDraft.truncated) {
       setWarnings(['Brouillon volumineux : seule la semaine affichée a été récupérée']);
     }
@@ -532,13 +539,13 @@ const FileMenu: React.FC<FileMenuProps> = ({
             )}
           </div>
 
-          {selectedSchedule && (
+          {openSchedule && (
             <span
               className="hidden 2xl:flex items-center gap-1.5 text-xs text-gray-500 truncate max-w-[16rem] flex-none"
-              title={`Planning actuel : ${selectedSchedule.name}`}
+              title={`Planning actuel : ${openSchedule.name}`}
             >
-              <span className="font-medium text-gray-700 truncate">{selectedSchedule.name}</span>
-              {selectedSchedule.isLocal && <LocalBadge />}
+              <span className="font-medium text-gray-700 truncate">{openSchedule.name}</span>
+              {openSchedule.isLocal && <LocalBadge />}
             </span>
           )}
 

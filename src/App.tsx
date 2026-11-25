@@ -12,6 +12,7 @@ import { useCorrespondences } from './hooks/useCorrespondences';
 import CorrespondencesDialog from './components/History/CorrespondencesDialog';
 import { referenceHoursByEmployee } from './utils/history/correspondences';
 import { prefillFromReference } from './utils/history/prefill';
+import { findLatestSaveForWeek } from './utils/firebase/schedules';
 import FileMenu from './components/FileMenu/FileMenu';
 import DisplaySettingsMenu, { DisplaySettings, DEFAULT_DISPLAY_SETTINGS } from './components/DisplaySettingsMenu';
 import CSVImport from './components/CSVImport';
@@ -97,6 +98,9 @@ function App() {
   const [year, setYear] = useState(autoSaved?.year || getCurrentWeekYear());
   // Plannings des autres semaines (la semaine affichée vit dans `schedules`)
   const weeksRef = useRef<Record<string, Record<string, Schedule>>>(autoSaved?.weeks || {});
+  // Liste des salariés de chaque semaine (noms, ordre) : chaque semaine a la
+  // sienne, comme ses horaires. La semaine affichée vit dans `employees`.
+  const weekEmployeesRef = useRef<Record<string, Employee[]>>(autoSaved?.weekEmployees || {});
   const [employeeCount, setEmployeeCount] = useState(autoSaved?.employees?.length || 10);
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (autoSaved?.employees?.length) return autoSaved.employees;
@@ -125,6 +129,25 @@ function App() {
     () => ({ ...weeksRef.current, [weekKey]: schedules }),
     [weekKey, schedules]
   );
+  // Nombre de fois où la liste propre d'une semaine a été fixée (pour recalculer
+  // ce qui part dans l'auto-sauvegarde)
+  const [listTick, setListTick] = useState(0);
+  // La semaine affichée n'est enregistrée avec sa liste que si cette liste est
+  // la sienne (pas une liste provisoire en attente de vérification)
+  const allWeekEmployees = useMemo(
+    () =>
+      weekEmployeesRef.current[weekKey]
+        ? { ...weekEmployeesRef.current, [weekKey]: employees }
+        : { ...weekEmployeesRef.current },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekKey, employees, listTick]
+  );
+
+  // Semaine sans liste de salariés propre (données d'avant la 1.18.2) pour
+  // laquelle une sauvegarde existe : on propose de la recharger
+  const [legacyWeek, setLegacyWeek] = useState<{ key: string; save: SavedSchedule } | null>(null);
+  const [weekNotice, setWeekNotice] = useState<string | null>(null);
+
 
   // Brouillon partagé entre postes : on n'écrit dans le cloud qu'une fois
   // vérifié qu'aucun brouillon plus récent n'attend sur un autre PC, sinon
@@ -138,16 +161,89 @@ function App() {
     weekNumber,
     year,
     allWeeks,
-    cloudDraftChecked ? user?.uid ?? null : null
+    cloudDraftChecked ? user?.uid ?? null : null,
+    allWeekEmployees
   );
 
-  // Change de semaine affichée : mémorise la semaine courante puis charge la nouvelle
+  const applyEmployees = useCallback((list: Employee[]) => {
+    setEmployees(list);
+    setEmployeeCount(list.length);
+  }, []);
+
+  // Change de semaine affichée : mémorise la semaine courante (horaires ET
+  // salariés) puis charge la nouvelle avec SA liste de salariés
   const switchToWeek = useCallback((newWeek: number, newYear: number) => {
-    weeksRef.current = { ...weeksRef.current, [weekKeyOf(year, weekNumber)]: schedules };
-    resetSchedules(weeksRef.current[weekKeyOf(newYear, newWeek)] || {});
+    const oldKey = weekKeyOf(year, weekNumber);
+    const newKey = weekKeyOf(newYear, newWeek);
+    weeksRef.current = { ...weeksRef.current, [oldKey]: schedules };
+    // On ne fige la liste de la semaine quittée que si elle était la sienne
+    if (weekEmployeesRef.current[oldKey]) {
+      weekEmployeesRef.current = { ...weekEmployeesRef.current, [oldKey]: employees };
+    }
+    const newSchedules = weeksRef.current[newKey] || {};
+    resetSchedules(newSchedules);
     setWeekNumber(newWeek);
     setYear(newYear);
-  }, [schedules, weekNumber, year, resetSchedules]);
+    setLegacyWeek(null);
+    setWeekNotice(null);
+
+    // La semaine a sa propre liste : on la reprend. Sinon elle garde
+    // provisoirement la liste actuelle (voir l'effet ci-dessous)
+    const ownEmployees = weekEmployeesRef.current[newKey];
+    if (ownEmployees) applyEmployees(ownEmployees);
+  }, [schedules, employees, weekNumber, year, resetSchedules, applyEmployees]);
+
+  // Semaine affichée sans liste de salariés propre (données d'avant la
+  // 1.18.2) : si une sauvegarde de cette semaine existe, elle fait foi. Rien
+  // en mémoire → on la charge ; sinon on propose de la recharger.
+  const schedulesRef = useRef(schedules);
+  schedulesRef.current = schedules;
+  const employeesRef = useRef(employees);
+  employeesRef.current = employees;
+  useEffect(() => {
+    const key = weekKey;
+    if (weekEmployeesRef.current[key]) return;
+    let cancelled = false;
+    findLatestSaveForWeek(weekNumber, year).then((save) => {
+      if (cancelled || weekEmployeesRef.current[key]) return;
+      if (!save) {
+        // Aucune sauvegarde : la liste actuelle devient celle de la semaine
+        weekEmployeesRef.current = { ...weekEmployeesRef.current, [key]: employeesRef.current };
+        setListTick((n) => n + 1);
+        return;
+      }
+      if (Object.keys(schedulesRef.current).length === 0) {
+        weeksRef.current = { ...weeksRef.current, [key]: save.schedules };
+        weekEmployeesRef.current = { ...weekEmployeesRef.current, [key]: save.employees };
+        resetSchedules(save.schedules);
+        applyEmployees(save.employees);
+        setWeekNotice(`Semaine chargée depuis la sauvegarde « ${save.name} ».`);
+      } else {
+        setLegacyWeek({ key, save });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [weekKey, weekNumber, year, resetSchedules, applyEmployees]);
+
+  // Recharge la semaine affichée depuis sa dernière sauvegarde (horaires + salariés)
+  const reloadLegacyWeek = () => {
+    if (!legacyWeek || legacyWeek.key !== weekKey) return;
+    const { save } = legacyWeek;
+    weeksRef.current = { ...weeksRef.current, [weekKey]: save.schedules };
+    weekEmployeesRef.current = { ...weekEmployeesRef.current, [weekKey]: save.employees };
+    resetSchedules(save.schedules);
+    applyEmployees(save.employees);
+    setLegacyWeek(null);
+    setWeekNotice(`Semaine rechargée depuis la sauvegarde « ${save.name} ».`);
+  };
+
+  const keepLegacyWeek = () => {
+    weekEmployeesRef.current = { ...weekEmployeesRef.current, [weekKey]: employees };
+    setListTick((n) => n + 1);
+    setLegacyWeek(null);
+  };
 
   const goToPreviousWeek = () => {
     if (weekNumber > 1) switchToWeek(weekNumber - 1, year);
@@ -172,6 +268,12 @@ function App() {
     if (Object.keys(schedules).length === 0 ||
         window.confirm('Remplacer le planning de cette semaine par celui de la semaine précédente ?')) {
       setSchedules({ ...prevSchedules });
+      // Les horaires vont avec les salariés de la semaine copiée
+      const prevEmployees = weekEmployeesRef.current[prevKey];
+      if (prevEmployees) {
+        weekEmployeesRef.current = { ...weekEmployeesRef.current, [weekKey]: prevEmployees };
+        applyEmployees(prevEmployees);
+      }
     }
   };
 
@@ -489,11 +591,17 @@ function App() {
   const handleNewSchedule = () => {
     if (window.confirm("Etes-vous sur de vouloir creer un nouveau planning vide ? Toutes les donnees non sauvegardees (toutes semaines confondues) seront perdues.")) {
       weeksRef.current = {};
-      resetSchedules({});
-      setEmployees(Array.from({ length: employeeCount }, (_, index) => ({
+      const freshEmployees = Array.from({ length: employeeCount }, (_, index) => ({
         id: index + 1,
         name: `Employe ${index + 1}`,
-      })));
+      }));
+      weekEmployeesRef.current = {
+        [weekKeyOf(getCurrentWeekYear(), getCurrentWeekNumber())]: freshEmployees,
+      };
+      setListTick((n) => n + 1);
+      setLegacyWeek(null);
+      resetSchedules({});
+      setEmployees(freshEmployees);
       setWeekNumber(getCurrentWeekNumber());
       setYear(getCurrentWeekYear());
     }
@@ -668,14 +776,26 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <FileMenu
-        onRestore={(savedSchedule: SavedSchedule, restoredWeeks?: Record<string, Record<string, Schedule>>) => {
+        onRestore={(
+          savedSchedule: SavedSchedule,
+          restoredWeeks?: Record<string, Record<string, Schedule>>,
+          restoredWeekEmployees?: Record<string, Employee[]>
+        ) => {
           // Un brouillon complet remplace toutes les semaines ouvertes ; une
           // sauvegarde simple ne touche que sa propre semaine.
           weeksRef.current = restoredWeeks
             ? { ...restoredWeeks }
             : { ...weeksRef.current, [weekKey]: schedules };
+          // Chaque semaine garde sa liste de salariés ; la sauvegarde ouverte
+          // apporte celle de SA semaine
+          weekEmployeesRef.current = restoredWeeks
+            ? { ...(restoredWeekEmployees ?? {}) }
+            : { ...weekEmployeesRef.current, [weekKey]: employees };
+          weekEmployeesRef.current[weekKeyOf(savedSchedule.year, savedSchedule.weekNumber)] = savedSchedule.employees;
+          setLegacyWeek(null);
+          setWeekNotice(null);
           resetSchedules(savedSchedule.schedules);
-          setEmployees(savedSchedule.employees);
+          applyEmployees(savedSchedule.employees);
           // L'ordre des salariés de la sauvegarde devient l'ordre retenu sur ce
           // poste (sinon un ordre plus récent, mémorisé à part, le remplacerait
           // au prochain chargement)
@@ -871,6 +991,37 @@ function App() {
             '--table-border-width': `${displaySettings.borderWidth}px`,
           } as React.CSSProperties}
         >
+          {legacyWeek && legacyWeek.key === weekKey && (
+            <div className="mx-4 mt-3 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-900 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span>
+                Cette semaine n'a pas encore sa propre liste de salariés : les noms affichés sont peut-être ceux
+                d'une autre semaine. La sauvegarde <strong>« {legacyWeek.save.name} »</strong> contient les noms et
+                horaires de cette semaine.
+              </span>
+              <span className="ml-auto flex gap-2">
+                <button
+                  onClick={reloadLegacyWeek}
+                  className="px-3 py-1 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700"
+                >
+                  Recharger cette semaine depuis la sauvegarde
+                </button>
+                <button
+                  onClick={keepLegacyWeek}
+                  className="px-3 py-1 text-sm text-amber-900 border border-amber-300 rounded-md hover:bg-amber-100"
+                >
+                  Garder l'affichage actuel
+                </button>
+              </span>
+            </div>
+          )}
+          {weekNotice && !legacyWeek && (
+            <div className="mx-4 mt-3 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex items-center gap-2">
+              {weekNotice}
+              <button onClick={() => setWeekNotice(null)} className="ml-auto text-green-700 hover:underline">
+                OK
+              </button>
+            </div>
+          )}
           {renderContent()}
         </div>
       </main>

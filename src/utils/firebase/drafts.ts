@@ -21,6 +21,8 @@ export interface CloudDraft {
   weekNumber: number;
   year: number;
   weeks?: Record<string, Record<string, Schedule>>;
+  /** Liste des salariés de chaque semaine (mêmes clés que `weeks`) */
+  weekEmployees?: Record<string, Employee[]>;
   /** Horodatage ISO de l'auto-sauvegarde (même valeur que la version locale). */
   timestamp: string;
   deviceId: string;
@@ -56,13 +58,14 @@ export const saveCloudDraft = async (
     };
 
     if (byteSize(payload) > MAX_DRAFT_BYTES) {
-      payload = { ...payload, weeks: undefined, truncated: true };
+      payload = { ...payload, weeks: undefined, weekEmployees: undefined, truncated: true };
     }
 
     const result = await withTimeout(
       setDoc(doc(db, DRAFTS_COLLECTION, uid), {
         ...payload,
         weeks: payload.weeks ?? null,
+        weekEmployees: payload.weekEmployees ?? null,
         updatedAt: Timestamp.now(),
       }),
       WRITE_TIMEOUT_MS
@@ -96,6 +99,7 @@ export const loadCloudDraft = async (uid: string): Promise<CloudDraft | null> =>
       weekNumber: data.weekNumber,
       year: data.year,
       weeks: data.weeks || undefined,
+      weekEmployees: data.weekEmployees || undefined,
       timestamp: data.timestamp,
       deviceId: data.deviceId || '',
       deviceLabel: data.deviceLabel || 'un autre poste',

@@ -49,3 +49,7 @@ du personnel de la saison qu'aux semaines **à venir**, au moment de reprendre
 un planning N-1 (correspondances N / N-1). Piste : une liste de salariés propre
 à chaque semaine (ou à chaque saison), copiée de la semaine précédente, au lieu
 d'une liste unique.
+
+**Fait en 1.18.2 :** chaque semaine a désormais sa propre liste de salariés.
+Une fonction « coller une liste » pourrait donc revenir en ne s'appliquant
+qu'à la semaine affichée (et aux semaines créées ensuite).

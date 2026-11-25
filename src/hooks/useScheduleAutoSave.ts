@@ -15,6 +15,8 @@ export interface ScheduleAutoSaveData {
   timestamp: string;
   /** Plannings de toutes les semaines ouvertes, indexés par clé "AAAA-Sxx" */
   weeks?: Record<string, Record<string, Schedule>>;
+  /** Liste des salariés (noms, ordre) de chaque semaine, mêmes clés que `weeks` */
+  weekEmployees?: Record<string, Employee[]>;
 }
 
 /** État de l'envoi du brouillon vers le cloud (affiché dans la barre du haut). */
@@ -50,7 +52,8 @@ export const useScheduleAutoSave = (
    * ligne d'un autre poste avant que l'utilisateur ait choisi de le
    * récupérer ou non.
    */
-  uid?: string | null
+  uid?: string | null,
+  weekEmployees?: Record<string, Employee[]>
 ) => {
   const [lastAutoSave, setLastAutoSave] = useState<string | null>(() => {
     const saved = loadScheduleAutoSave();
@@ -63,8 +66,8 @@ export const useScheduleAutoSave = (
   const indicatorTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const isInitialMount = useRef(true);
   // Dernier état connu, pour l'envoi différé et le flush à la fermeture.
-  const dataRef = useRef({ schedules, employees, weekNumber, year, weeks });
-  dataRef.current = { schedules, employees, weekNumber, year, weeks };
+  const dataRef = useRef({ schedules, employees, weekNumber, year, weeks, weekEmployees });
+  dataRef.current = { schedules, employees, weekNumber, year, weeks, weekEmployees };
   const timestampRef = useRef<string | null>(lastAutoSave);
   const uidRef = useRef<string | null>(uid ?? null);
   uidRef.current = uid ?? null;
@@ -83,6 +86,7 @@ export const useScheduleAutoSave = (
       weekNumber: data.weekNumber,
       year: data.year,
       weeks: data.weeks,
+      weekEmployees: data.weekEmployees,
       timestamp: timestampRef.current || new Date().toISOString(),
     });
 
@@ -109,6 +113,7 @@ export const useScheduleAutoSave = (
         year,
         timestamp: now,
         weeks,
+        weekEmployees,
       };
       localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
       timestampRef.current = now;
@@ -127,7 +132,7 @@ export const useScheduleAutoSave = (
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [schedules, employees, weekNumber, year, weeks, pushCloudDraft]);
+  }, [schedules, employees, weekNumber, year, weeks, weekEmployees, pushCloudDraft]);
 
   // L'envoi vers le cloud n'est autorisé qu'après la vérification d'un
   // éventuel brouillon plus récent : si des modifications ont eu lieu
