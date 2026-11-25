@@ -3,9 +3,11 @@ import { CalendarClock } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import LoginPage from './LoginPage';
 import UnauthorizedScreen from './UnauthorizedScreen';
+import VerifyEmailScreen from './VerifyEmailScreen';
 
 // Bloque l'accès à l'application tant que l'utilisateur n'est pas
-// connecté ET présent dans la liste blanche (allowedUsers).
+// connecté, avec une adresse email confirmée, ET présent dans la liste
+// blanche (allowedUsers).
 const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { status } = useAuth();
 
@@ -22,6 +24,10 @@ const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (status === 'signedOut') {
     return <LoginPage />;
+  }
+
+  if (status === 'unverified') {
+    return <VerifyEmailScreen />;
   }
 
   if (status === 'unauthorized') {

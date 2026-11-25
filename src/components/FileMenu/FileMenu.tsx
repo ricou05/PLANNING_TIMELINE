@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, AlertCircle, Check, AlertTriangle, Clock, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, RefreshCw, ChevronDown } from 'lucide-react';
+import { Save, Copy, FolderOpen, FilePlus, AlertCircle, Check, AlertTriangle, Clock, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, RefreshCw, ChevronDown, FileSpreadsheet } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule, renameAllSchedules } from '../../utils/firebase';
 import { syncLocalSchedules } from '../../utils/firebase/sync';
@@ -20,6 +20,7 @@ import SaveAsDialog from './dialogs/SaveAsDialog';
 import DeleteScheduleDialog from './dialogs/DeleteScheduleDialog';
 import RestoreDialog from './dialogs/RestoreDialog';
 import RenameAllDialog from './dialogs/RenameAllDialog';
+import HistoryImportDialog from '../History/HistoryImportDialog';
 
 export interface SaveData {
   schedules: Record<string, Schedule>;
@@ -77,6 +78,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
 }) => {
   const { user, isAdmin, signOut } = useAuth();
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showHistoryImport, setShowHistoryImport] = useState(false);
   const [savedSchedules, setSavedSchedules] = useState<SavedSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -598,6 +600,15 @@ const FileMenu: React.FC<FileMenuProps> = ({
                     <Copy className="w-4 h-4 text-gray-400" />
                     Enregistrer sous...
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => { setShowFileMenu(false); setShowHistoryImport(true); }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                      Importer l'historique Excel...
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -641,6 +652,8 @@ const FileMenu: React.FC<FileMenuProps> = ({
         isOpen={showUserManagement}
         onClose={() => setShowUserManagement(false)}
       />
+
+      {showHistoryImport && <HistoryImportDialog onClose={() => setShowHistoryImport(false)} />}
 
       <div className="fixed top-14 left-0 right-0 z-40 px-4">
         <div className="max-w-[95%] mx-auto">

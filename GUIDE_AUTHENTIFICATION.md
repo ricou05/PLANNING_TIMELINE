@@ -61,12 +61,26 @@ C'est cette étape qui ferme réellement l'accès public à la base.
 > « Brouillon local » en permanence) — les sauvegardes manuelles, elles,
 > continuent de fonctionner.
 
+> **À refaire après la mise à jour « email confirmé + historique » (version 1.16.0)** :
+> - les règles exigent désormais une **adresse email confirmée** (`email_verified`).
+>   Les comptes Google le sont toujours ; un compte email/mot de passe doit cliquer
+>   une fois sur le lien reçu par email (l'application affiche un écran
+>   « Confirmez votre adresse email » avec un bouton pour renvoyer le lien).
+>   Sans cela, quelqu'un pourrait créer un compte avec l'email d'un collègue
+>   autorisé qui ne s'est encore jamais connecté.
+> - un bloc `match /historique/{weekId}` protège l'historique importé du fichier
+>   Excel (lecture : utilisateurs autorisés ; import : administrateurs).
+>
+> Ordre conseillé : se connecter à la nouvelle version, confirmer son adresse si
+> l'application le demande, **puis** republier les règles.
+
 ## Étape 3 — Créer votre compte admin
 
 1. Ouvrir l'application (une fois la nouvelle version déployée)
 2. Sur la page de connexion, cliquer sur **« Première connexion ? Créer mon accès »**
 3. Saisir `eric.isola@gmail.com` et choisir votre mot de passe (8 caractères minimum)
-4. Valider : vous êtes connecté en tant qu'administrateur
+4. Valider, puis cliquer sur le lien de confirmation reçu par email et sur
+   « J'ai confirmé » : vous êtes connecté en tant qu'administrateur
 
 Votre email est reconnu comme **admin principal** : il est codé dans les règles de
 sécurité et dans l'application, et ne peut pas être révoqué.
@@ -81,7 +95,8 @@ sécurité et dans l'application, et ne peut pas être révoqué.
 2. Saisir l'email de la personne, choisir son rôle (**Utilisateur** ou **Admin**), cliquer **Ajouter**
 3. Transmettre à la personne la marche à suivre :
    *« Va sur l'application → “Première connexion ? Créer mon accès” → saisis ton
-   email et choisis ton mot de passe »*
+   email et choisis ton mot de passe, puis clique sur le lien reçu par email »*
+   (ou simplement « Continuer avec Google » si c'est une adresse Google)
 
 Seuls les emails ajoutés à cette liste ont accès aux plannings. Une personne non
 autorisée qui créerait un compte verrait un écran « Accès non autorisé » et les

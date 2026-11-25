@@ -5,6 +5,7 @@ import WeeklyGridView from './components/WeeklyGridView';
 import WeeklyVisualView from './components/WeeklyVisualView';
 import TimelineView from './components/TimelineView';
 import ExcelView from './components/ExcelView';
+import ReferencePanel from './components/History/ReferencePanel';
 import FileMenu from './components/FileMenu/FileMenu';
 import DisplaySettingsMenu, { DisplaySettings, DEFAULT_DISPLAY_SETTINGS } from './components/DisplaySettingsMenu';
 import CSVImport from './components/CSVImport';
@@ -119,7 +120,7 @@ function App() {
   // Brouillon partagé entre postes : on n'écrit dans le cloud qu'une fois
   // vérifié qu'aucun brouillon plus récent n'attend sur un autre PC, sinon
   // on l'écraserait avant même de l'avoir proposé.
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [cloudDraftChecked, setCloudDraftChecked] = useState(false);
   const handleCloudDraftChecked = useCallback(() => setCloudDraftChecked(true), []);
   const scheduleAutoSave = useScheduleAutoSave(
@@ -479,8 +480,21 @@ function App() {
   const colorLabelsForSave = managedColors.map(mc => ({ color: mc.id, label: mc.label }));
 
   const renderContent = () => {
+    // Assistant N-1 (semaine de référence de l'an passé), au-dessus des Vues 1 et 2
+    const referencePanel = (
+      <ReferencePanel
+        weekNumber={weekNumber}
+        year={year}
+        employees={employees}
+        schedules={schedules}
+        isAdmin={isAdmin}
+      />
+    );
+
     if (activeTab === 'grid') {
       return (
+        <>
+        {referencePanel}
         <WeeklyGridView
           employees={employees}
           days={DAYS}
@@ -502,9 +516,12 @@ function App() {
           onTransferDay={handleTransferDay}
           displaySettings={displaySettings}
         />
+        </>
       );
     } else if (activeTab === 'visual') {
       return (
+        <>
+        {referencePanel}
         <WeeklyVisualView
           employees={employees}
           days={DAYS}
@@ -525,6 +542,7 @@ function App() {
           onSetAbsence={handleSetAbsence}
           onTransferDay={handleTransferDay}
         />
+        </>
       );
     } else if (activeTab === 'weekly') {
       return (

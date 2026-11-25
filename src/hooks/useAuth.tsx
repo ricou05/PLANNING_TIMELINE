@@ -7,14 +7,17 @@ import {
   signOutUser,
   lookupAllowedUser,
   ensureBootstrapAdminDoc,
+  refreshEmailVerification,
 } from '../utils/firebase';
 import type { UserRole } from '../utils/firebase';
 
 // - loading      : état de connexion en cours de résolution
 // - signedOut    : personne n'est connecté → page de login
+// - unverified   : connecté avec une adresse email pas encore confirmée
+//                  (compte email/mot de passe) → écran de vérification
 // - unauthorized : connecté mais email absent de la liste blanche → accès refusé
 // - authorized   : connecté et autorisé → application
-export type AuthStatus = 'loading' | 'signedOut' | 'unauthorized' | 'authorized';
+export type AuthStatus = 'loading' | 'signedOut' | 'unverified' | 'unauthorized' | 'authorized';
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -28,6 +31,11 @@ interface AuthContextValue {
   authError: string | null;
   /** Relance la vérification sans avoir à se déconnecter/reconnecter. */
   recheck: () => void;
+  /**
+   * Relit le compte après un clic sur le lien de confirmation reçu par email.
+   * Renvoie false si l'adresse n'est toujours pas vérifiée.
+   */
+  confirmEmailVerified: () => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -93,6 +101,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       userRef.current = firebaseUser;
       setUser(firebaseUser);
+
+      // Adresse non confirmée : aucun accès (les règles Firestore exigent
+      // aussi email_verified). Les comptes Google sont déjà vérifiés.
+      if (!firebaseUser.emailVerified) {
+        setRole(null);
+        setAuthError(null);
+        setStatus('unverified');
+        return;
+      }
+
       setStatus('loading');
       await checkAuthorization(firebaseUser, isStale);
     });
@@ -109,6 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (attempt === 0) return;
     const current = userRef.current;
     if (!current) return;
+    if (!current.emailVerified) {
+      setStatus('unverified');
+      return;
+    }
 
     let cancelled = false;
     setStatus('loading');
@@ -118,13 +140,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const recheck = useCallback(() => setAttempt(n => n + 1), []);
 
+  const confirmEmailVerified = useCallback(async () => {
+    const verified = await refreshEmailVerification();
+    if (verified) recheck();
+    return verified;
+  }, [recheck]);
+
   const signOut = useCallback(async () => {
     await signOutUser();
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ status, user, role, isAdmin: role === 'admin', authError, recheck, signOut }}
+      value={{ status, user, role, isAdmin: role === 'admin', authError, recheck, confirmEmailVerified, signOut }}
     >
       {children}
     </AuthContext.Provider>

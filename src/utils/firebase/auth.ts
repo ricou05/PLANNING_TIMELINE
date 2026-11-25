@@ -6,6 +6,8 @@ import {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  sendEmailVerification,
+  reload,
   User,
 } from 'firebase/auth';
 import { auth } from './config';
@@ -59,9 +61,39 @@ export const signInUser = async (email: string, password: string): Promise<User>
 // Première connexion : l'utilisateur crée son compte avec l'email que
 // l'administrateur a autorisé. Le compte Auth seul ne donne aucun accès
 // aux données : les règles Firestore exigent d'être dans la liste blanche.
+// Un email de confirmation part aussitôt : tant que l'adresse n'est pas
+// vérifiée, l'application et les règles Firestore refusent l'accès (sinon
+// n'importe qui pourrait créer un compte avec l'email d'un collègue autorisé).
 export const registerUser = async (email: string, password: string): Promise<User> => {
   const credential = await createUserWithEmailAndPassword(auth, normalizeEmail(email), password);
+  try {
+    await sendEmailVerification(credential.user);
+  } catch (err) {
+    // L'écran de vérification propose de renvoyer l'email
+    console.error("Envoi de l'email de vérification impossible :", err);
+  }
   return credential.user;
+};
+
+/** (Re)envoie l'email de confirmation d'adresse au compte connecté. */
+export const sendVerificationEmail = async (): Promise<void> => {
+  if (!auth.currentUser) throw new Error('Aucun utilisateur connecté');
+  await sendEmailVerification(auth.currentUser);
+};
+
+/**
+ * Relit le compte connecté auprès de Firebase (l'utilisateur vient peut-être
+ * de cliquer sur le lien de confirmation) et renouvelle son jeton, pour que
+ * les règles Firestore voient aussi l'adresse comme vérifiée.
+ * Renvoie true si l'adresse est désormais vérifiée.
+ */
+export const refreshEmailVerification = async (): Promise<boolean> => {
+  const current = auth.currentUser;
+  if (!current) return false;
+  await reload(current);
+  if (!current.emailVerified) return false;
+  await current.getIdToken(true);
+  return true;
 };
 
 // Connexion via un compte Google (popup). Crée le compte automatiquement

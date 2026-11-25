@@ -13,6 +13,8 @@ export {
   signInUser,
   signInWithGoogle,
   registerUser,
+  sendVerificationEmail,
+  refreshEmailVerification,
   resetPassword,
   signOutUser,
   subscribeToAuthState,
