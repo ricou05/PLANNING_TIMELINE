@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, X, AlertCircle, Check, AlertTriangle, Clock, Trash2, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, HardDrive, RefreshCw, Laptop, ChevronDown, Tag } from 'lucide-react';
+import { Save, Copy, FolderOpen, FilePlus, AlertCircle, Check, AlertTriangle, Clock, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, RefreshCw, ChevronDown } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { getSchedules, saveSchedule, updateSchedule, deleteSchedule, renameAllSchedules } from '../../utils/firebase';
 import { syncLocalSchedules } from '../../utils/firebase/sync';
@@ -12,6 +12,14 @@ import { buildScheduleName, isCanonicalScheduleName } from '../../utils/dateUtil
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData, CloudDraftStatus } from '../../hooks/useScheduleAutoSave';
 import { APP_VERSION } from '../../version';
+import { formatAutoSaveTime } from './formatters';
+import LocalBadge from './LocalBadge';
+import IncomingDraftDialog from './dialogs/IncomingDraftDialog';
+import ConflictDialog from './dialogs/ConflictDialog';
+import SaveAsDialog from './dialogs/SaveAsDialog';
+import DeleteScheduleDialog from './dialogs/DeleteScheduleDialog';
+import RestoreDialog from './dialogs/RestoreDialog';
+import RenameAllDialog from './dialogs/RenameAllDialog';
 
 export interface SaveData {
   schedules: Record<string, Schedule>;
@@ -54,17 +62,6 @@ interface FileMenuProps {
 
 /** Écart en dessous duquel deux brouillons sont considérés équivalents. */
 const DRAFT_TOLERANCE_MS = 5000;
-
-const formatAutoSaveTime = (iso: string): string => {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} a ${pad(d.getHours())}h${pad(d.getMinutes())}`;
-};
-
-const formatTimestamp = (timestamp?: Timestamp | null): string => {
-  if (!timestamp?.toDate) return 'date inconnue';
-  return formatAutoSaveTime(timestamp.toDate().toISOString());
-};
 
 const FileMenu: React.FC<FileMenuProps> = ({
   children,
@@ -460,16 +457,6 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const defaultSaveName = buildScheduleName(weekNumber, year);
   const outdatedNameCount = savedSchedules.filter(s => !isCanonicalScheduleName(s.name)).length;
 
-  const localBadge = (
-    <span
-      className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 whitespace-nowrap"
-      title="Cette sauvegarde n'existe que sur ce PC : elle partira en ligne dès que possible"
-    >
-      <HardDrive className="w-3 h-3" />
-      Local - non synchronise
-    </span>
-  );
-
   return (
     <>
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-50">
@@ -549,7 +536,7 @@ const FileMenu: React.FC<FileMenuProps> = ({
               title={`Planning actuel : ${selectedSchedule.name}`}
             >
               <span className="font-medium text-gray-700 truncate">{selectedSchedule.name}</span>
-              {selectedSchedule.isLocal && localBadge}
+              {selectedSchedule.isLocal && <LocalBadge />}
             </span>
           )}
 
@@ -686,368 +673,67 @@ const FileMenu: React.FC<FileMenuProps> = ({
 
       {/* Brouillon plus récent trouvé sur un autre poste */}
       {incomingDraft && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
-            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
-              <Laptop className="w-5 h-5 text-sky-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Brouillon plus recent disponible</h2>
-            </div>
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-gray-600">
-                Un brouillon plus recent a ete laisse sur{' '}
-                <span className="font-semibold text-gray-900">{incomingDraft.deviceLabel}</span>{' '}
-                le {formatAutoSaveTime(incomingDraft.timestamp)}.
-              </p>
-              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg text-sm text-gray-700">
-                <div>Semaine {incomingDraft.weekNumber} - {incomingDraft.year}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {incomingDraft.employees?.length || 0} employes
-                  {incomingDraft.weeks && ` - ${Object.keys(incomingDraft.weeks).length} semaine(s)`}
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Le recuperer remplacera le planning actuellement affiche sur ce PC.
-              </p>
-            </div>
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
-              <button
-                onClick={handleIgnoreIncomingDraft}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Ignorer
-              </button>
-              <button
-                onClick={handleAcceptIncomingDraft}
-                className="px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-lg hover:bg-sky-700 active:bg-sky-800 shadow-sm transition-all duration-150"
-              >
-                Recuperer le brouillon
-              </button>
-            </div>
-          </div>
-        </div>
+        <IncomingDraftDialog
+          draft={incomingDraft}
+          onIgnore={handleIgnoreIncomingDraft}
+          onAccept={handleAcceptIncomingDraft}
+        />
       )}
 
       {/* Sauvegarde refusée : modification concurrente */}
       {conflict && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
-            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-orange-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Modifie ailleurs entre-temps</h2>
-            </div>
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-gray-600">
-                La sauvegarde <span className="font-semibold text-gray-900">"{conflict.name}"</span> a ete
-                modifiee en ligne le {formatTimestamp(conflict.remoteUpdatedAt)}, depuis un autre PC ou par
-                un autre utilisateur.
-              </p>
-              <p className="text-sm text-gray-600">
-                Ecraser remplacera cette version par celle affichee ici. Pour repartir de la version en
-                ligne, annulez puis utilisez <span className="font-medium">Ouvrir</span>.
-              </p>
-            </div>
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
-              <button
-                onClick={() => setConflict(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleForceSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 active:bg-orange-800 shadow-sm transition-all duration-150"
-              >
-                Ecraser quand meme
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConflictDialog
+          name={conflict.name}
+          remoteUpdatedAt={conflict.remoteUpdatedAt}
+          onCancel={() => setConflict(null)}
+          onForceSave={handleForceSave}
+        />
       )}
 
       {showSaveAsDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col animate-scaleIn">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Enregistrer sous</h2>
-              <button
-                onClick={() => setShowSaveAsDialog(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nouvelle sauvegarde
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    placeholder={defaultSaveName}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => handleSave(saveName.trim() || buildScheduleName(weekNumber, year))}
-                    disabled={loading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150 whitespace-nowrap"
-                  >
-                    Creer
-                  </button>
-                </div>
-              </div>
-
-              {savedSchedules.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ou ecraser une sauvegarde existante
-                  </label>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {savedSchedules.map((schedule) => (
-                      <button
-                        key={schedule.id}
-                        onClick={() => handleSave(schedule.name, schedule)}
-                        disabled={loading}
-                        className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition-all duration-150 disabled:opacity-50"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-gray-900 truncate">{schedule.name}</span>
-                          <span className="text-xs text-orange-600 font-medium">Ecraser</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500">
-                            Semaine {schedule.weekNumber} - {schedule.year}
-                          </span>
-                          {schedule.isLocal && localBadge}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end">
-              <button
-                onClick={() => setShowSaveAsDialog(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
+        <SaveAsDialog
+          saveName={saveName}
+          onSaveNameChange={setSaveName}
+          defaultSaveName={defaultSaveName}
+          savedSchedules={savedSchedules}
+          loading={loading}
+          onCreate={() => handleSave(saveName.trim() || buildScheduleName(weekNumber, year))}
+          onOverwrite={(schedule) => handleSave(schedule.name, schedule)}
+          onClose={() => setShowSaveAsDialog(false)}
+        />
       )}
 
       {scheduleToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[400px] animate-scaleIn">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Confirmer la suppression</h2>
-            </div>
-            <div className="p-4">
-              <p className="text-sm text-gray-600">
-                Voulez-vous vraiment supprimer la sauvegarde <span className="font-semibold text-gray-900">"{scheduleToDelete.name}"</span> ?
-              </p>
-              <p className="text-xs text-red-500 mt-2">Cette action est irreversible.</p>
-            </div>
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
-              <button
-                onClick={() => setScheduleToDelete(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => handleDelete(scheduleToDelete)}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteScheduleDialog
+          schedule={scheduleToDelete}
+          loading={loading}
+          onCancel={() => setScheduleToDelete(null)}
+          onConfirm={() => handleDelete(scheduleToDelete)}
+        />
       )}
 
       {showRestoreDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col animate-scaleIn">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Ouvrir un planning</h2>
-              <button
-                onClick={() => setShowRestoreDialog(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              {autoSaveData && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-4 h-4 text-amber-500" />
-                    <span className="text-sm font-medium text-amber-700">Brouillon auto-sauvegarde</span>
-                  </div>
-                  <button
-                    onClick={() => handleRestoreAutoSave(autoSaveData)}
-                    className="w-full p-4 text-left border-2 border-amber-200 bg-amber-50 rounded-lg hover:border-amber-400 hover:bg-amber-100 transition-all duration-150"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-gray-900">
-                        Dernier brouillon en cours
-                      </div>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">
-                        <Clock className="w-3 h-3" />
-                        Auto
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      Semaine {autoSaveData.weekNumber} - {autoSaveData.year}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-gray-400">
-                        {autoSaveData.employees?.length || 0} employes
-                      </span>
-                      <span className="text-xs text-amber-500">
-                        Sauvegarde le {formatAutoSaveTime(autoSaveData.timestamp)}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              )}
-
-              {savedSchedules.length === 0 && !autoSaveData ? (
-                <p className="text-sm text-gray-500 text-center py-8">Aucun planning sauvegarde</p>
-              ) : savedSchedules.length > 0 && (
-                <div>
-                  {autoSaveData && (
-                    <div className="flex items-center gap-2 mb-2">
-                      <Save className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm font-medium text-blue-700">Sauvegardes manuelles</span>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    {savedSchedules.map((schedule) => (
-                      <div key={schedule.id} className="flex items-stretch gap-2">
-                        <button
-                          onClick={() => handleRestore(schedule)}
-                          className="flex-1 p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-gray-900 truncate">{schedule.name}</span>
-                            {schedule.isLocal ? localBadge : (
-                              <span
-                                className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5 whitespace-nowrap"
-                                title="Disponible depuis tous vos PC"
-                              >
-                                <Cloud className="w-3 h-3" />
-                                En ligne
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-500 mt-1">
-                            Semaine {schedule.weekNumber} - {schedule.year}
-                          </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {schedule.employees?.length || 0} employes
-                            {schedule.updatedAt && ` - modifie le ${formatTimestamp(schedule.updatedAt)}`}
-                          </div>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setScheduleToDelete(schedule); }}
-                          className="flex items-center justify-center px-3 border border-gray-200 rounded-lg hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-150"
-                          title="Supprimer cette sauvegarde"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex items-center justify-between gap-2">
-              {outdatedNameCount > 0 ? (
-                <button
-                  onClick={() => setShowRenameAllDialog(true)}
-                  disabled={renaming}
-                  title="Renommer toutes les sauvegardes au format AAAA-MM-sem-SS-HH-MM"
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                >
-                  <Tag className="w-4 h-4" />
-                  Renommer au format standard ({outdatedNameCount})
-                </button>
-              ) : (
-                <span className="text-xs text-gray-400">Noms au format AAAA-MM-sem-SS-HH-MM</span>
-              )}
-              <button
-                onClick={() => setShowRestoreDialog(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
+        <RestoreDialog
+          autoSaveData={autoSaveData}
+          savedSchedules={savedSchedules}
+          outdatedNameCount={outdatedNameCount}
+          renaming={renaming}
+          onRestoreAutoSave={handleRestoreAutoSave}
+          onRestore={handleRestore}
+          onAskDelete={setScheduleToDelete}
+          onAskRenameAll={() => setShowRenameAllDialog(true)}
+          onClose={() => setShowRestoreDialog(false)}
+        />
       )}
 
       {/* Renommage en masse : action groupee, donc confirmee */}
       {showRenameAllDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-[520px] animate-scaleIn">
-            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
-              <Tag className="w-5 h-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Renommer les sauvegardes</h2>
-            </div>
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-gray-600">
-                {outdatedNameCount === 1
-                  ? '1 sauvegarde va etre renommee'
-                  : `${outdatedNameCount} sauvegardes vont etre renommees`}{' '}
-                au format <span className="font-mono font-medium text-gray-900">AAAA-MM-sem-SS-HH-MM</span>.
-              </p>
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700 space-y-1">
-                <div>
-                  <span className="font-medium">AAAA-MM</span> : annee et mois de la semaine planifiee
-                </div>
-                <div>
-                  <span className="font-medium">sem-SS</span> : numero de la semaine du planning
-                </div>
-                <div>
-                  <span className="font-medium">HH-MM</span> : heure de la sauvegarde
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Seuls les noms changent : le contenu des plannings n'est pas touche. Les sauvegardes
-                deja au bon format sont ignorees.
-              </p>
-            </div>
-            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
-              <button
-                onClick={() => setShowRenameAllDialog(false)}
-                disabled={renaming}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 disabled:opacity-50 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleRenameAll}
-                disabled={renaming}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 shadow-sm transition-all duration-150"
-              >
-                {renaming && <RefreshCw className="w-4 h-4 animate-spin" />}
-                {renaming ? 'Renommage...' : 'Renommer'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RenameAllDialog
+          outdatedNameCount={outdatedNameCount}
+          renaming={renaming}
+          onCancel={() => setShowRenameAllDialog(false)}
+          onConfirm={handleRenameAll}
+        />
       )}
     </>
   );

@@ -22,11 +22,13 @@ Il n'y a **pas de suite de tests**. Pour valider un changement visuel (vues, exp
 
 Chaque push sur `main` déclenche `.github/workflows/deploy.yml` (Node 22, `npm install`, `npm run build`) et publie sur GitHub Pages (`ricou05.github.io/PLANNING_TIMELINE`). `vite.config.ts` met `base` à `/PLANNING_TIMELINE/` uniquement quand `GITHUB_ACTIONS` est défini. Le service worker PWA (`registerType: 'autoUpdate'`) met l'app à jour côté utilisateurs.
 
-**À chaque publication sur `main`, incrémenter la version** dans `src/version.ts` (`APP_VERSION` + `APP_RELEASE_DATE` au format `JJ/MM/AAAA`) — demande explicite de l'utilisateur. Correctif → patch (1.14.0 → 1.14.1), nouvelle fonctionnalité → mineure (1.14.0 → 1.15.0). Cette version est affichée dans l'app (menu Fichier, page de login) ; le champ `version` de `package.json` n'est pas utilisé.
+**À chaque publication sur `main`, incrémenter la version** dans `src/version.ts` (`APP_VERSION` + `APP_RELEASE_DATE` au format `JJ/MM/AAAA`) — demande explicite de l'utilisateur. Correctif → patch (1.14.0 → 1.14.1), nouvelle fonctionnalité → mineure (1.14.0 → 1.15.0). Cette version est affichée dans l'app (menu Fichier, page de login) ; le champ `version` de `package.json` n'est pas utilisé. Le skill projet **`/publier`** (`.claude/skills/publier/`) enchaîne version, vérifications, commit et push sur `main`.
 
 ## Architecture
 
 **Point d'entrée** : `main.tsx` → `AuthProvider` → `AuthGate` → `App`. `AuthGate` n'affiche l'app que si l'utilisateur est connecté **et** présent dans la liste blanche Firestore (`allowedUsers`). L'admin principal est codé en dur à la fois dans `src/utils/firebase/rules.txt` et dans le code (`utils/firebase/auth.ts`, `hooks/useAuth.tsx`, `utils/firebase/users.ts`) : les modifier ensemble.
+
+**Menu Fichier** : `components/FileMenu/FileMenu.tsx` garde l'état et la logique de sauvegarde ; ses boîtes de dialogue sont des composants d'affichage dans `components/FileMenu/dialogs/`.
 
 **État central dans `App.tsx`** (gros composant, ~800 lignes) : employés, semaine/année, onglet actif, réglages d'affichage. Les plannings sont un `Record<string, Schedule>` indexé par **`` `${employee.id}-${jour}` ``** où `jour` est le nom français (`'Lundi'`…`'Dimanche'`). Ce format de clé est utilisé partout (vues, calculs, exports, Firestore). Les plannings de plusieurs semaines sont gardés en mémoire dans `weeksRef`, indexés `AAAA-Sxx` ; `useUndoRedo` gère l'historique de la semaine affichée.
 
@@ -41,7 +43,7 @@ Un `Schedule` = créneaux matin/après-midi (`'HH:MM'`), couleur par demi-journ�
 
 Les réglages d'affichage (`DisplaySettingsMenu` : police, largeur de colonnes, épaisseur des traits) passent par des variables CSS (`--font-scale`, `--col-scale`, `--table-border-width`) sur le conteneur `.display-scope`, et sont aussi transmis aux exports.
 
-**Exports PDF/PNG** (`utils/pdfExport.ts`, `utils/pdfTimelineExport.ts`) : chaque vue est **reconstruite en DOM à part** (styles inline, largeur A4 paysage 1122 px), rendue par `html2canvas` puis insérée dans `jsPDF` ou téléchargée en PNG. Une modification visuelle d'une vue web ne se répercute donc pas sur l'export : il faut modifier les deux. `html2canvas` a des limites (centrage flex décalé → on centre par `line-height`, hauteurs entières pour éviter des liserés). `jspdf` et `html2canvas` sont importés dynamiquement. La hauteur des lignes est plafonnée à celle de l'écran (`MAX_ROW_H_*`), sauf option « Remplir toute la page » (`PDFExportOptions.fillPage`).
+**Exports PDF/PNG** (`utils/pdfExport.ts` = point d'entrée ; code par vue dans `utils/pdf/` : `classicTable.ts`, `gridTable.ts`, `visualTable.ts`, éléments communs et rendu dans `shared.ts` ; frise du jour dans `utils/pdfTimelineExport.ts`) : chaque vue est **reconstruite en DOM à part** (styles inline, largeur A4 paysage 1122 px), rendue par `html2canvas` puis insérée dans `jsPDF` ou téléchargée en PNG. Une modification visuelle d'une vue web ne se répercute donc pas sur l'export : il faut modifier les deux. `html2canvas` a des limites (centrage flex décalé → on centre par `line-height`, hauteurs entières pour éviter des liserés). `jspdf` et `html2canvas` sont importés dynamiquement. La hauteur des lignes est plafonnée à celle de l'écran (`MAX_ROW_H_*`), sauf option « Remplir toute la page » (`PDFExportOptions.fillPage`).
 
 **Persistance — trois niveaux** (détails utilisateur dans `GUIDE_MULTI_PC.md`) :
 1. Brouillon automatique : `useScheduleAutoSave` écrit dans `localStorage` (`schedule_autosave`, debounce 1,5 s) et dans Firestore `drafts/{uid}` (debounce 8 s) ; au démarrage, un brouillon cloud plus récent est proposé à l'utilisateur.
