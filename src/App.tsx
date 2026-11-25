@@ -394,12 +394,15 @@ function App() {
     });
   };
 
-  const handleCSVImport = (data: { employees: Employee[], schedules: Record<string, Schedule> }) => {
-    setEmployees(data.employees);
-    setSchedules(prev => ({
-      ...prev,
-      ...data.schedules
-    }));
+  // Import CSV dans la semaine affichée. En mode « remplacer », le fichier
+  // devient toute la semaine (salariés et horaires) : aucune case de
+  // l'ancien planning ne subsiste. La liste importée devient celle de la semaine.
+  const handleCSVImport = (data: { employees: Employee[], schedules: Record<string, Schedule>, replace: boolean }) => {
+    applyEmployees(data.employees);
+    weekEmployeesRef.current = { ...weekEmployeesRef.current, [weekKey]: data.employees };
+    setListTick((n) => n + 1);
+    setLegacyWeek(null);
+    setSchedules(prev => (data.replace ? { ...data.schedules } : { ...prev, ...data.schedules }));
   };
 
   const handleToggleRestDay = useCallback((employeeId: number, day: string, isRest: boolean) => {
