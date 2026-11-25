@@ -25,6 +25,10 @@ import {
   DAY_DRAG_HINT,
 } from '../utils/planningDrag';
 
+import SchoolHolidayBand from './SchoolHolidayBand';
+import { getWeekDates } from '../utils/dateUtils';
+import { getPublicHoliday } from '../utils/calendarInfo';
+
 const REST_DAY_STRIPES = `repeating-linear-gradient(
   -45deg,
   transparent,
@@ -421,6 +425,10 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
   onSetAbsence,
   onTransferDay,
 }) => {
+  // Dates réelles de la semaine : bandeau des vacances et jours fériés
+  const weekDates = getWeekDates(weekNumber, year);
+  const publicHolidays = weekDates.map(getPublicHoliday);
+
   const [exporting, setExporting] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState('bleu');
@@ -533,6 +541,7 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-sm">
           <thead>
+            <SchoolHolidayBand weekDates={weekDates} borderClass="border border-gray-300" />
             <tr className="bg-gray-100">
               <th
                 className="border border-gray-300 px-3 py-2 text-left font-bold text-gray-700 bg-gray-200 sticky left-0 z-10"
@@ -548,6 +557,11 @@ const WeeklyVisualView: React.FC<WeeklyVisualViewProps> = ({
                 >
                   <div className="text-sm">{day}</div>
                   <div className="text-xs font-normal text-gray-500">{dates[i]}</div>
+                  {publicHolidays[i] && (
+                    <div className="text-[11px] font-bold text-red-700" title={`Jour férié : ${publicHolidays[i]}`}>
+                      Férié · {publicHolidays[i]}
+                    </div>
+                  )}
                   <div className="flex items-center justify-center gap-1 mt-1">
                     <button
                       onClick={() => onCopyDay(day)}

@@ -24,6 +24,9 @@ import {
 import { REST_DAY_STRIPES } from '../utils/cellStyles';
 import { exportGridToPDF, ExportDisplaySettings } from '../utils/pdfExport';
 import PDFExportModal, { PDFExportOptions } from './PDFExportModal';
+import SchoolHolidayBand from './SchoolHolidayBand';
+import { getWeekDates } from '../utils/dateUtils';
+import { getPublicHoliday } from '../utils/calendarInfo';
 
 // Teinte rosée des en-têtes de jours alternés, comme sur le planning Excel d'origine
 const HEADER_PINK = '#f4cccc';
@@ -477,6 +480,10 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
     setPendingAbsence(null);
   };
 
+  // Dates réelles de la semaine : bandeau des vacances et jours fériés
+  const weekDates = getWeekDates(weekNumber, year);
+  const publicHolidays = weekDates.map(getPublicHoliday);
+
   // Numéro du jour (le format d'entrée est "jj/mm")
   const dayNumberOf = (date: string): string => {
     const dayPart = date.split('/')[0];
@@ -533,6 +540,7 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
             <col style={{ width: '7.5%' }} />
           </colgroup>
           <thead>
+            <SchoolHolidayBand weekDates={weekDates} borderClass="border border-gray-400" />
             <tr>
               <th className="border border-gray-700 px-3 py-1 bg-white sticky left-0 z-10" />
               {days.map((day, i) => (
@@ -543,6 +551,14 @@ const WeeklyGridView: React.FC<WeeklyGridViewProps> = ({
                 >
                   <div className="text-base font-bold leading-tight">{day}</div>
                   <div className="text-[15px] font-normal leading-tight">{dayNumberOf(dates[i])}</div>
+                  {publicHolidays[i] && (
+                    <div
+                      className="text-[11px] font-bold leading-tight text-red-700 truncate"
+                      title={`Jour férié : ${publicHolidays[i]}`}
+                    >
+                      Férié · {publicHolidays[i]}
+                    </div>
+                  )}
                   <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={() => onCopyDay(day)}
