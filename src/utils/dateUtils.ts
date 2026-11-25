@@ -87,13 +87,10 @@ export function formatTimestamp(timestamp: SupportedTimestamp): string {
 // Nommage normalisé des sauvegardes
 // ---------------------------------------------------------------------------
 //
-// Format imposé : AAAA-MM-sem-SS-HH-MM
+// Format imposé : AAAA-Sxx-vN
 //   AAAA  année ISO de la semaine du PLANNING (pas celle du jour de travail)
-//   MM    mois de cette semaine, pris sur son jeudi — jour de référence ISO,
-//         donc le mois auquel la semaine appartient réellement (la semaine 36
-//         de 2026 commence le 31/08 mais est bien la 1re semaine de septembre)
-//   SS    numéro de semaine du planning sur 2 chiffres
-//   HH-MM heure de la sauvegarde
+//   Sxx   numéro de semaine du planning sur 2 chiffres
+//   vN    version de cette semaine (chaque enregistrement crée la suivante)
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -103,30 +100,22 @@ export function getWeekReferenceDate(weekNumber: number, year: number): Date {
 }
 
 /**
- * Nom canonique d'une sauvegarde.
- * @param weekNumber semaine du planning sauvegardé
- * @param year       année du planning sauvegardé
- * @param savedAt    heure de la sauvegarde (par défaut : maintenant)
+ * Nom d'une sauvegarde : année et semaine ISO du planning, puis numéro de
+ * version de cette semaine (« 2026-S48-v3 »). La date et l'heure de
+ * l'enregistrement sont affichées à part, dans la liste « Ouvrir ».
  */
-export function buildScheduleName(
-  weekNumber: number,
-  year: number,
-  savedAt: Date = new Date()
-): string {
-  const reference = getWeekReferenceDate(weekNumber, year);
-  return [
-    reference.getFullYear(),
-    pad2(reference.getMonth() + 1),
-    'sem',
-    pad2(weekNumber),
-    pad2(savedAt.getHours()),
-    pad2(savedAt.getMinutes()),
-  ].join('-');
+export function buildScheduleName(weekNumber: number, year: number, version: number): string {
+  return `${year}-S${pad2(weekNumber)}-v${version}`;
 }
 
-/** Suffixe `-2`, `-3`… toléré pour départager deux sauvegardes de la même minute. */
-const SCHEDULE_NAME_PATTERN = /^\d{4}-\d{2}-sem-\d{2}-\d{2}-\d{2}(-\d+)?$/;
+const SCHEDULE_NAME_PATTERN = /^(\d{4})-S(\d{2})-v(\d+)$/;
+
+/** Année, semaine et version lues dans un nom au format « 2026-S48-v3 », sinon null */
+export function parseScheduleName(name: string): { year: number; weekNumber: number; version: number } | null {
+  const m = SCHEDULE_NAME_PATTERN.exec(name.trim());
+  return m ? { year: Number(m[1]), weekNumber: Number(m[2]), version: Number(m[3]) } : null;
+}
 
 export function isCanonicalScheduleName(name: string): boolean {
-  return SCHEDULE_NAME_PATTERN.test(name);
+  return SCHEDULE_NAME_PATTERN.test(name.trim());
 }

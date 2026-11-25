@@ -60,4 +60,6 @@ export interface SavedSchedule {
   isLocal?: boolean;
   /** Identifiant Firestore réservé pour cette sauvegarde locale (évite les doublons à la synchro) */
   remoteId?: string;
+  /** Qui a enregistré cette version (email du compte) */
+  savedBy?: string;
 }

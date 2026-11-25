@@ -1,5 +1,6 @@
 export { db, auth } from './config';
-export { saveSchedule, updateSchedule, getSchedules, deleteSchedule, renameSchedule, renameAllSchedules } from './schedules';
+export { saveSchedule, saveNewVersion, updateSchedule, getSchedules, deleteSchedule, renameSchedule, renameAllSchedules, MAX_VERSIONS_PER_WEEK } from './schedules';
+export type { NewVersionResult } from './schedules';
 export type { WriteResult, UpdateOptions, RenameAllResult } from './schedules';
 export { syncLocalSchedules, countLocalSchedules } from './sync';
 export type { SyncResult } from './sync';

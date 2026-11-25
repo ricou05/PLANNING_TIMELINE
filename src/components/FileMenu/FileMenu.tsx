@@ -1,22 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, Copy, FolderOpen, FilePlus, AlertCircle, Check, AlertTriangle, Clock, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, RefreshCw, ChevronDown, FileSpreadsheet } from 'lucide-react';
+import { Save, FolderOpen, FilePlus, AlertCircle, Check, AlertTriangle, Clock, Users, LogOut, ShieldCheck, User as UserIcon, Cloud, CloudOff, RefreshCw, ChevronDown, FileSpreadsheet } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
-import { getSchedules, saveSchedule, updateSchedule, deleteSchedule, renameAllSchedules } from '../../utils/firebase';
+import { getSchedules, saveNewVersion, deleteSchedule, renameAllSchedules, MAX_VERSIONS_PER_WEEK } from '../../utils/firebase';
 import { syncLocalSchedules } from '../../utils/firebase/sync';
 import { loadCloudDraft, CloudDraft } from '../../utils/firebase/drafts';
 import { getDeviceId } from '../../utils/storage/device';
 import { useAuth } from '../../hooks/useAuth';
 import UserManagementModal from '../Auth/UserManagementModal';
 import { SavedSchedule, Schedule, Employee, ColorLabel } from '../../types';
-import { buildScheduleName, isCanonicalScheduleName } from '../../utils/dateUtils';
+import { isCanonicalScheduleName } from '../../utils/dateUtils';
 import { validateSaveData } from '../../utils/validation';
 import { loadScheduleAutoSave, ScheduleAutoSaveData, CloudDraftStatus } from '../../hooks/useScheduleAutoSave';
 import { APP_VERSION } from '../../version';
 import { formatAutoSaveTime } from './formatters';
 import LocalBadge from './LocalBadge';
 import IncomingDraftDialog from './dialogs/IncomingDraftDialog';
-import ConflictDialog from './dialogs/ConflictDialog';
-import SaveAsDialog from './dialogs/SaveAsDialog';
 import DeleteScheduleDialog from './dialogs/DeleteScheduleDialog';
 import RestoreDialog from './dialogs/RestoreDialog';
 import RenameAllDialog from './dialogs/RenameAllDialog';
@@ -84,21 +82,13 @@ const FileMenu: React.FC<FileMenuProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [showSaveAsDialog, setShowSaveAsDialog] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<SavedSchedule | null>(null);
   const [scheduleToDelete, setScheduleToDelete] = useState<SavedSchedule | null>(null);
-  const [saveName, setSaveName] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [pendingLocalCount, setPendingLocalCount] = useState(0);
-  // Sauvegarde refusée car le planning a changé en ligne entre-temps
-  const [conflict, setConflict] = useState<{
-    schedule: SavedSchedule;
-    name: string;
-    remoteUpdatedAt: Timestamp | null;
-  } | null>(null);
   // Brouillon plus récent trouvé en ligne (autre poste)
   const [incomingDraft, setIncomingDraft] = useState<CloudDraft | null>(null);
   // Renommage en masse des anciennes sauvegardes au format standard
@@ -225,11 +215,11 @@ const FileMenu: React.FC<FileMenuProps> = ({
   }, [success, error]);
 
   /**
-   * Enregistre le planning courant.
-   * @param target sauvegarde à écraser, ou null pour en créer une nouvelle
-   * @param force  écraser malgré une modification concurrente détectée
+   * Enregistre le planning de la semaine affichée comme NOUVELLE version
+   * (« 2026-S48-v4 ») : rien n'est jamais écrasé ; au-delà de
+   * MAX_VERSIONS_PER_WEEK versions, les plus anciennes sont supprimées.
    */
-  const performSave = async (name: string, target: SavedSchedule | null, force = false) => {
+  const handleQuickSave = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -237,65 +227,58 @@ const FileMenu: React.FC<FileMenuProps> = ({
 
       const data = await onSave();
       const validation = validateSaveData(data);
-
       if (!validation.isValid) {
         setError(validation.error || 'Donnees invalides');
         return;
       }
 
-      const result = target
-        ? await updateSchedule(
-            target.id,
-            name,
-            data.schedules,
-            data.employees,
-            data.weekNumber,
-            data.year,
-            data.colorLabels,
-            { expectedUpdatedAt: target.updatedAt || target.createdAt, force }
-          )
-        : await saveSchedule(
-            name,
-            data.schedules,
-            data.employees,
-            data.weekNumber,
-            data.year,
-            data.colorLabels
-          );
-
-      // Modifié ailleurs : on demande confirmation au lieu d'écraser.
-      if (result.conflict && target) {
-        setConflict({ schedule: target, name, remoteUpdatedAt: result.conflict.remoteUpdatedAt });
-        return;
-      }
+      const result = await saveNewVersion(
+        data.schedules,
+        data.employees,
+        data.weekNumber,
+        data.year,
+        data.colorLabels,
+        user?.email || undefined
+      );
 
       // Une écriture mise en file d'attente hors ligne reste une réussite :
       // seul un échec franc doit remonter en erreur.
-      if (result.error && !result.queued) {
-        if (!result.id.startsWith('local_')) {
-          setError(result.error);
-          return;
-        }
+      if (result.error && !result.queued && !result.id.startsWith('local_')) {
+        setError(result.error);
+        return;
       }
+
+      // Une version plus récente que celle ouverte a été enregistrée ailleurs
+      // entre-temps : rien n'est perdu (nouvelle version), mais on le signale
+      const openedId = openSchedule?.id;
+      const savedElsewhere =
+        !!result.previousLatest && !!openedId && result.previousLatest.id !== openedId;
 
       setSelectedSchedule({
         id: result.id,
-        name,
+        name: result.name,
         schedules: data.schedules,
         employees: data.employees,
         weekNumber: data.weekNumber,
         year: data.year,
         colorLabels: data.colorLabels,
-        createdAt: target?.createdAt || result.updatedAt || Timestamp.now(),
+        createdAt: result.updatedAt || Timestamp.now(),
         updatedAt: result.updatedAt,
         isLocal: result.id.startsWith('local_'),
+        savedBy: user?.email || undefined,
       });
 
-      setSuccess(
-        result.id.startsWith('local_')
-          ? 'Sauvegarde enregistrée sur ce PC'
-          : 'Sauvegarde effectuee avec succes'
-      );
+      const where = result.id.startsWith('local_') ? ' sur ce PC' : '';
+      const pruned = result.pruned > 0
+        ? ` (${result.pruned} ancienne${result.pruned > 1 ? 's' : ''} version${result.pruned > 1 ? 's' : ''} supprimée${result.pruned > 1 ? 's' : ''} : ${MAX_VERSIONS_PER_WEEK} maximum par semaine)`
+        : '';
+      setSuccess(`${result.name} enregistrée${where}${pruned}`);
+      if (savedElsewhere && result.previousLatest) {
+        setWarnings(prev => [
+          ...prev,
+          `${result.previousLatest!.name} avait été enregistrée entre-temps (autre poste) : elle est conservée, votre planning est en ${result.name}.`,
+        ]);
+      }
 
       await loadSavedSchedules();
       if (result.error) setWarnings(prev => [...prev, result.error!]);
@@ -304,35 +287,14 @@ const FileMenu: React.FC<FileMenuProps> = ({
       setError("Erreur lors de la sauvegarde");
     } finally {
       setLoading(false);
-      setShowSaveAsDialog(false);
-      setSaveName('');
     }
   };
 
-  const handleSave = (name: string, scheduleToUpdate?: SavedSchedule) =>
-    performSave(name, scheduleToUpdate || null);
-
-  // La sauvegarde ouverte ne correspond qu'à SA semaine : après un changement
-  // de semaine, « Enregistrer » ne doit pas l'écraser avec une autre semaine.
+  // La sauvegarde ouverte ne correspond qu'à SA semaine
   const openSchedule =
     selectedSchedule && selectedSchedule.weekNumber === weekNumber && selectedSchedule.year === year
       ? selectedSchedule
       : null;
-
-  const handleQuickSave = () => {
-    if (!openSchedule) {
-      setShowSaveAsDialog(true);
-      return;
-    }
-    return performSave(openSchedule.name, openSchedule);
-  };
-
-  const handleForceSave = () => {
-    if (!conflict) return;
-    const { schedule, name } = conflict;
-    setConflict(null);
-    performSave(name, schedule, true);
-  };
 
   const handleRestore = (schedule: SavedSchedule) => {
     setSelectedSchedule(schedule);
@@ -462,8 +424,6 @@ const FileMenu: React.FC<FileMenuProps> = ({
 
   const autoSaveData = showRestoreDialog ? loadScheduleAutoSave() : null;
 
-  // Nom propose a la sauvegarde : semaine du planning affiche + heure courante.
-  const defaultSaveName = buildScheduleName(weekNumber, year);
   const outdatedNameCount = savedSchedules.filter(s => !isCanonicalScheduleName(s.name)).length;
 
   return (
@@ -571,20 +531,19 @@ const FileMenu: React.FC<FileMenuProps> = ({
             <button
               onClick={handleQuickSave}
               disabled={loading}
-              title="Sauvegarder"
+              title="Enregistrer une nouvelle version de cette semaine (AAAA-Sxx-vN)"
               className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
             >
               <Save className="w-4 h-4" />
               <span className="hidden lg:inline">Sauvegarder</span>
             </button>
 
-            {/* « Ouvrir » et « Enregistrer sous… » partagent un menu : deux
-                actions peu fréquentes n'ont pas à occuper deux boutons. */}
+            {/* Menu « Ouvrir » (et import de l'historique pour les admins) */}
             <div className="relative" ref={fileMenuRef}>
               <button
                 onClick={() => setShowFileMenu(v => !v)}
                 disabled={loading}
-                title="Ouvrir ou enregistrer sous un autre nom"
+                title="Ouvrir une sauvegarde"
                 className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all duration-150"
               >
                 <FolderOpen className="w-4 h-4" />
@@ -599,13 +558,6 @@ const FileMenu: React.FC<FileMenuProps> = ({
                   >
                     <FolderOpen className="w-4 h-4 text-gray-400" />
                     Ouvrir un planning...
-                  </button>
-                  <button
-                    onClick={() => { setShowFileMenu(false); loadSavedSchedules(); setShowSaveAsDialog(true); }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Copy className="w-4 h-4 text-gray-400" />
-                    Enregistrer sous...
                   </button>
                   {isAdmin && (
                     <button
@@ -697,29 +649,6 @@ const FileMenu: React.FC<FileMenuProps> = ({
           draft={incomingDraft}
           onIgnore={handleIgnoreIncomingDraft}
           onAccept={handleAcceptIncomingDraft}
-        />
-      )}
-
-      {/* Sauvegarde refusée : modification concurrente */}
-      {conflict && (
-        <ConflictDialog
-          name={conflict.name}
-          remoteUpdatedAt={conflict.remoteUpdatedAt}
-          onCancel={() => setConflict(null)}
-          onForceSave={handleForceSave}
-        />
-      )}
-
-      {showSaveAsDialog && (
-        <SaveAsDialog
-          saveName={saveName}
-          onSaveNameChange={setSaveName}
-          defaultSaveName={defaultSaveName}
-          savedSchedules={savedSchedules}
-          loading={loading}
-          onCreate={() => handleSave(saveName.trim() || buildScheduleName(weekNumber, year))}
-          onOverwrite={(schedule) => handleSave(schedule.name, schedule)}
-          onClose={() => setShowSaveAsDialog(false)}
         />
       )}
 

@@ -1,5 +1,6 @@
-import React from 'react';
-import { X, Clock, Save, Cloud, Trash2, Tag } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { X, Clock, Save, Cloud, Trash2, Tag, ChevronDown, ChevronRight } from 'lucide-react';
+import { getWeekDates, parseScheduleName } from '../../../utils/dateUtils';
 import { SavedSchedule } from '../../../types';
 import { ScheduleAutoSaveData } from '../../../hooks/useScheduleAutoSave';
 import { formatAutoSaveTime, formatTimestamp } from '../formatters';
@@ -18,7 +19,89 @@ interface RestoreDialogProps {
   onClose: () => void;
 }
 
-const RestoreDialog: React.FC<RestoreDialogProps> = ({ autoSaveData, savedSchedules, outdatedNameCount, renaming, onRestoreAutoSave, onRestore, onAskDelete, onAskRenameAll, onClose }) => (
+const createdMillis = (s: SavedSchedule): number => {
+  const t = (s.createdAt || s.updatedAt) as { toMillis?: () => number } | undefined;
+  return typeof t?.toMillis === 'function' ? t.toMillis() : 0;
+};
+
+const weekRange = (weekNumber: number, year: number): string => {
+  const dates = getWeekDates(weekNumber, year);
+  const f = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  return `${f(dates[0])} → ${f(dates[6])} ${dates[6].getFullYear()}`;
+};
+
+interface WeekGroup {
+  key: string;
+  weekNumber: number;
+  year: number;
+  /** De la plus récente à la plus ancienne */
+  versions: SavedSchedule[];
+}
+
+const RestoreDialog: React.FC<RestoreDialogProps> = ({ autoSaveData, savedSchedules, outdatedNameCount, renaming, onRestoreAutoSave, onRestore, onAskDelete, onAskRenameAll, onClose }) => {
+  // Sauvegardes regroupées par semaine du planning, semaines les plus récentes en haut
+  const groups = useMemo<WeekGroup[]>(() => {
+    const map = new Map<string, WeekGroup>();
+    savedSchedules.forEach((s) => {
+      const key = `${s.year}-${String(s.weekNumber).padStart(2, '0')}`;
+      const group = map.get(key) ?? { key, weekNumber: s.weekNumber, year: s.year, versions: [] };
+      group.versions.push(s);
+      map.set(key, group);
+    });
+    const versionOf = (s: SavedSchedule) => parseScheduleName(s.name)?.version ?? 0;
+    return [...map.values()]
+      .map((g) => ({
+        ...g,
+        versions: g.versions.sort((a, b) => createdMillis(b) - createdMillis(a) || versionOf(b) - versionOf(a)),
+      }))
+      .sort((a, b) => b.year - a.year || b.weekNumber - a.weekNumber);
+  }, [savedSchedules]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const renderVersion = (schedule: SavedSchedule, isLatest: boolean) => (
+    <div key={schedule.id} className="flex items-stretch gap-2">
+      <button
+        onClick={() => onRestore(schedule)}
+        className={`flex-1 px-3 py-2 text-left border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150 ${
+          isLatest ? 'border-gray-300' : 'border-gray-200'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className={`truncate ${isLatest ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{schedule.name}</span>
+            {isLatest && (
+              <span className="text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                dernière
+              </span>
+            )}
+          </span>
+          {schedule.isLocal ? <LocalBadge /> : (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5 whitespace-nowrap"
+              title="Disponible depuis tous vos PC"
+            >
+              <Cloud className="w-3 h-3" />
+              En ligne
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-400 mt-0.5">
+          {schedule.createdAt && `Enregistrée le ${formatTimestamp(schedule.createdAt)}`}
+          {schedule.savedBy && ` · ${schedule.savedBy.split('@')[0]}`}
+          {` · ${schedule.employees?.length || 0} salariés`}
+        </div>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onAskDelete(schedule); }}
+        className="flex items-center justify-center px-3 border border-gray-200 rounded-lg hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-150"
+        title="Supprimer cette version"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
+  return (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
     <div className="bg-white rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col animate-scaleIn">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -76,42 +159,34 @@ const RestoreDialog: React.FC<RestoreDialogProps> = ({ autoSaveData, savedSchedu
                 <span className="text-sm font-medium text-blue-700">Sauvegardes manuelles</span>
               </div>
             )}
-            <div className="space-y-2">
-              {savedSchedules.map((schedule) => (
-                <div key={schedule.id} className="flex items-stretch gap-2">
-                  <button
-                    onClick={() => onRestore(schedule)}
-                    className="flex-1 p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-150"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-gray-900 truncate">{schedule.name}</span>
-                      {schedule.isLocal ? <LocalBadge /> : (
-                        <span
-                          className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5 whitespace-nowrap"
-                          title="Disponible depuis tous vos PC"
+            <div className="space-y-3">
+              {groups.map((group) => {
+                const [latest, ...older] = group.versions;
+                const open = expanded[group.key];
+                return (
+                  <div key={group.key}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-sm font-semibold text-gray-800">
+                        Semaine {group.weekNumber} - {group.year}
+                        <span className="font-normal text-gray-500"> · {weekRange(group.weekNumber, group.year)}</span>
+                      </span>
+                      {older.length > 0 && (
+                        <button
+                          onClick={() => setExpanded((e) => ({ ...e, [group.key]: !open }))}
+                          className="flex items-center gap-0.5 text-xs text-blue-600 hover:underline"
                         >
-                          <Cloud className="w-3 h-3" />
-                          En ligne
-                        </span>
+                          {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          {open ? 'Masquer' : 'Voir'} les {older.length} version{older.length > 1 ? 's' : ''} précédente{older.length > 1 ? 's' : ''}
+                        </button>
                       )}
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      Semaine {schedule.weekNumber} - {schedule.year}
+                    <div className="space-y-1.5">
+                      {renderVersion(latest, true)}
+                      {open && older.map((s) => renderVersion(s, false))}
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {schedule.employees?.length || 0} employes
-                      {schedule.updatedAt && ` - modifie le ${formatTimestamp(schedule.updatedAt)}`}
-                    </div>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onAskDelete(schedule); }}
-                    className="flex items-center justify-center px-3 border border-gray-200 rounded-lg hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-150"
-                    title="Supprimer cette sauvegarde"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -122,14 +197,14 @@ const RestoreDialog: React.FC<RestoreDialogProps> = ({ autoSaveData, savedSchedu
           <button
             onClick={onAskRenameAll}
             disabled={renaming}
-            title="Renommer toutes les sauvegardes au format AAAA-MM-sem-SS-HH-MM"
+            title="Renommer toutes les sauvegardes au format AAAA-Sxx-vN (versions numérotées dans l'ordre d'enregistrement)"
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
           >
             <Tag className="w-4 h-4" />
             Renommer au format standard ({outdatedNameCount})
           </button>
         ) : (
-          <span className="text-xs text-gray-400">Noms au format AAAA-MM-sem-SS-HH-MM</span>
+          <span className="text-xs text-gray-400">Noms au format AAAA-Sxx-vN · 10 versions max par semaine</span>
         )}
         <button
           onClick={onClose}
@@ -141,5 +216,6 @@ const RestoreDialog: React.FC<RestoreDialogProps> = ({ autoSaveData, savedSchedu
     </div>
   </div>
 );
+};
 
 export default RestoreDialog;

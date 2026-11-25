@@ -2,7 +2,7 @@ import { SavedSchedule } from '../../types';
 import { Timestamp } from 'firebase/firestore';
 
 const STORAGE_KEY = 'localSchedules';
-type StoredTimestamp = Timestamp | { seconds: number; nanoseconds?: number } | number | null | undefined;
+type StoredTimestamp = Timestamp | { seconds: number; nanoseconds?: number } | number | string | null | undefined;
 type StoredSchedule = Omit<SavedSchedule, 'createdAt' | 'updatedAt'> & {
   createdAt?: StoredTimestamp;
   updatedAt?: StoredTimestamp;
@@ -85,6 +85,13 @@ function createTimestamp(timestamp: StoredTimestamp): Timestamp {
 
   if (typeof timestamp === 'number') {
     return Timestamp.fromMillis(timestamp);
+  }
+
+  // Date au format texte (ISO) : on la garde plutôt que de la remplacer par
+  // « maintenant », qui fausserait l'ordre des versions
+  if (typeof timestamp === 'string') {
+    const millis = Date.parse(timestamp);
+    if (!Number.isNaN(millis)) return Timestamp.fromMillis(millis);
   }
 
   return Timestamp.now();

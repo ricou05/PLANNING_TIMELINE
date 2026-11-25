@@ -21,17 +21,14 @@ const RenameAllDialog: React.FC<RenameAllDialogProps> = ({ outdatedNameCount, re
           {outdatedNameCount === 1
             ? '1 sauvegarde va etre renommee'
             : `${outdatedNameCount} sauvegardes vont etre renommees`}{' '}
-          au format <span className="font-mono font-medium text-gray-900">AAAA-MM-sem-SS-HH-MM</span>.
+          au format <span className="font-mono font-medium text-gray-900">AAAA-Sxx-vN</span>.
         </p>
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700 space-y-1">
           <div>
-            <span className="font-medium">AAAA-MM</span> : annee et mois de la semaine planifiee
+            <span className="font-medium">AAAA-Sxx</span> : annee et numero de la semaine du planning
           </div>
           <div>
-            <span className="font-medium">sem-SS</span> : numero de la semaine du planning
-          </div>
-          <div>
-            <span className="font-medium">HH-MM</span> : heure de la sauvegarde
+            <span className="font-medium">vN</span> : version de cette semaine (v1 = la plus ancienne, dans l'ordre d'enregistrement)
           </div>
         </div>
         <p className="text-xs text-gray-500">

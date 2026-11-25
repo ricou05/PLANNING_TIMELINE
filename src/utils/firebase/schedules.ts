@@ -13,7 +13,7 @@ import {
 import { db } from './config';
 import { Schedule, ColorLabel, SavedSchedule, Employee } from '../../types';
 import { saveLocalSchedule, updateLocalSchedule, getLocalSchedules, deleteLocalSchedule, renameLocalSchedule } from '../storage/localSchedules';
-import { buildScheduleName } from '../dateUtils';
+import { buildScheduleName, parseScheduleName } from '../dateUtils';
 import { handleFirebaseError, withTimeout, TIMED_OUT } from './error-handling';
 
 /** Au-delà, on considère que l'écriture est partie dans la file d'attente hors ligne. */
@@ -65,7 +65,8 @@ export const saveSchedule = async (
   employees: Employee[],
   weekNumber: number,
   year: number,
-  colorLabels: ColorLabel[]
+  colorLabels: ColorLabel[],
+  savedBy?: string
 ): Promise<WriteResult> => {
   invalidateSavesCache();
   // L'identifiant est réservé côté client : si l'écriture n'aboutit pas et
@@ -78,6 +79,7 @@ export const saveSchedule = async (
     const result = await withTimeout(
       setDoc(scheduleRef, {
         ...buildPayload(name, schedules, employees, weekNumber, year, colorLabels),
+        ...(savedBy ? { savedBy } : {}),
         createdAt,
         updatedAt: createdAt,
       }),
@@ -108,6 +110,7 @@ export const saveSchedule = async (
       weekNumber,
       year,
       colorLabels,
+      savedBy,
       createdAt,
       updatedAt: createdAt,
     });
@@ -230,7 +233,8 @@ export const getSchedules = async (): Promise<{ schedules: SavedSchedule[], warn
       year: doc.data().year,
       colorLabels: doc.data().colorLabels || [],
       createdAt: doc.data().createdAt,
-      updatedAt: doc.data().updatedAt || doc.data().createdAt
+      updatedAt: doc.data().updatedAt || doc.data().createdAt,
+      savedBy: doc.data().savedBy || undefined,
     }));
   } catch (error) {
     console.warn('Erreur lors de la récupération des sauvegardes Firebase:', error);
@@ -337,48 +341,94 @@ export interface RenameAllResult {
 export const renameAllSchedules = async (): Promise<RenameAllResult> => {
   const { schedules } = await getSchedules();
 
-  // Ordre chronologique : la numérotation des doublons reste stable d'une
-  // exécution à l'autre.
-  const ordered = [...schedules].sort(
-    (a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0)
-  );
+  // Par semaine du planning, dans l'ordre de création : v1, v2, v3…
+  const byWeek = new Map<string, SavedSchedule[]>();
+  schedules.forEach((schedule) => {
+    if (!schedule.weekNumber || !schedule.year) return;
+    const key = `${schedule.year}-${schedule.weekNumber}`;
+    byWeek.set(key, [...(byWeek.get(key) ?? []), schedule]);
+  });
 
-  const used = new Set<string>();
   let renamed = 0;
-  let skipped = 0;
+  let skipped = schedules.length - [...byWeek.values()].reduce((n, list) => n + list.length, 0);
   let failed = 0;
   let error: string | undefined;
 
-  for (const schedule of ordered) {
-    if (!schedule.weekNumber || !schedule.year) {
-      skipped++;
-      continue;
-    }
-
-    const savedAt = (schedule.createdAt || schedule.updatedAt)?.toDate?.() || new Date();
-    const base = buildScheduleName(schedule.weekNumber, schedule.year, savedAt);
-
-    let target = base;
-    for (let suffix = 2; used.has(target); suffix++) {
-      target = `${base}-${suffix}`;
-    }
-    used.add(target);
-
-    if (schedule.name === target) {
-      skipped++;
-      continue;
-    }
-
-    const result = await renameSchedule(schedule.id, target);
-    if (result.error) {
-      failed++;
-      error = result.error;
-    } else {
-      renamed++;
+  for (const list of byWeek.values()) {
+    const ordered = [...list].sort((a, b) => createdMillis(a) - createdMillis(b));
+    for (let i = 0; i < ordered.length; i++) {
+      const schedule = ordered[i];
+      const target = buildScheduleName(schedule.weekNumber, schedule.year, i + 1);
+      if (schedule.name === target) {
+        skipped++;
+        continue;
+      }
+      const result = await renameSchedule(schedule.id, target);
+      if (result.error) {
+        failed++;
+        error = result.error;
+      } else {
+        renamed++;
+      }
     }
   }
 
+  invalidateSavesCache();
   return { renamed, skipped, failed, error };
+};
+
+/** Nombre maximal de versions gardées pour une même semaine */
+export const MAX_VERSIONS_PER_WEEK = 10;
+
+const createdMillis = (s: SavedSchedule): number => {
+  const t = (s.createdAt || s.updatedAt) as { toMillis?: () => number } | undefined;
+  return typeof t?.toMillis === 'function' ? t.toMillis() : 0;
+};
+
+export interface NewVersionResult extends WriteResult {
+  name: string;
+  version: number;
+  /** Anciennes versions supprimées pour rester à MAX_VERSIONS_PER_WEEK */
+  pruned: number;
+  /** Dernière version de la semaine avant celle-ci (pour signaler un enregistrement fait ailleurs) */
+  previousLatest: SavedSchedule | null;
+}
+
+/**
+ * Enregistre une NOUVELLE version du planning d'une semaine (« 2026-S48-v4 »)
+ * sans jamais écraser les précédentes, puis supprime les plus anciennes
+ * au-delà de MAX_VERSIONS_PER_WEEK.
+ */
+export const saveNewVersion = async (
+  schedules: Record<string, Schedule>,
+  employees: Employee[],
+  weekNumber: number,
+  year: number,
+  colorLabels: ColorLabel[],
+  savedBy?: string
+): Promise<NewVersionResult> => {
+  const { schedules: all } = await getSchedules();
+  const forWeek = all
+    .filter((s) => s.weekNumber === weekNumber && s.year === year)
+    .sort((a, b) => createdMillis(b) - createdMillis(a));
+  const highest = forWeek.reduce((max, s) => Math.max(max, parseScheduleName(s.name)?.version ?? 0), 0);
+  const version = Math.max(highest, forWeek.length) + 1;
+  const name = buildScheduleName(weekNumber, year, version);
+
+  const result = await saveSchedule(name, schedules, employees, weekNumber, year, colorLabels, savedBy);
+
+  // Ménage : on ne garde que les versions les plus récentes de la semaine
+  let pruned = 0;
+  if (!result.error || result.id.startsWith('local_')) {
+    const toDelete = forWeek.slice(MAX_VERSIONS_PER_WEEK - 1);
+    for (const old of toDelete) {
+      const deleted = await deleteSchedule(old.id);
+      if (!deleted.error) pruned++;
+    }
+  }
+
+  invalidateSavesCache();
+  return { ...result, name, version, pruned, previousLatest: forWeek[0] ?? null };
 };
 
 // Liste des sauvegardes lue une fois par session pour retrouver celle d'une
@@ -389,10 +439,6 @@ export const invalidateSavesCache = (): void => {
   savesCache = null;
 };
 
-const millisOf = (s: SavedSchedule): number => {
-  const t = (s.updatedAt || s.createdAt) as { toMillis?: () => number } | undefined;
-  return typeof t?.toMillis === 'function' ? t.toMillis() : 0;
-};
 
 /** Sauvegarde la plus récente d'une semaine donnée, ou null s'il n'y en a pas. */
 export const findLatestSaveForWeek = async (weekNumber: number, year: number): Promise<SavedSchedule | null> => {
@@ -403,7 +449,7 @@ export const findLatestSaveForWeek = async (weekNumber: number, year: number): P
       (s) => s.weekNumber === weekNumber && s.year === year && s.employees?.length && s.schedules
     );
     if (forWeek.length === 0) return null;
-    return forWeek.sort((a, b) => millisOf(b) - millisOf(a))[0];
+    return forWeek.sort((a, b) => createdMillis(b) - createdMillis(a))[0];
   } catch (error) {
     console.warn('Recherche de la sauvegarde de la semaine impossible :', error);
     savesCache = null;
