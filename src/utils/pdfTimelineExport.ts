@@ -2,6 +2,7 @@ import { Employee, Schedule, ManagedColor } from '../types';
 import { calculateDailyHours } from './scheduleCalculations';
 import { findManagedColor, getTextColorForHex } from './colorUtils';
 import { timeToMinutes, minutesToTime, TIME_CONSTRAINTS, formatHoursHM as formatHours } from './timeUtils';
+import { saveCanvasAsPNG } from './pdfExport';
 
 interface ExportTimelinePDFParams {
   employees: Employee[];
@@ -11,6 +12,8 @@ interface ExportTimelinePDFParams {
   weekNumber: number;
   year: number;
   managedColors: ManagedColor[];
+  /** 'pdf' (défaut) pour impression, 'png' pour partage (WhatsApp, e-mail…) */
+  format?: 'pdf' | 'png';
 }
 
 const TIMELINE_PX_PER_HOUR = 70;
@@ -210,15 +213,14 @@ const buildTimelineHTML = (params: ExportTimelinePDFParams): HTMLElement => {
 
 export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Promise<void> => {
   // Chargées à la demande : jspdf et html2canvas ne pèsent pas sur le chargement initial
-  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
-    import('jspdf'),
-    import('html2canvas'),
-  ]);
+  const { default: html2canvas } = await import('html2canvas');
   const container = buildTimelineHTML(params);
   container.style.position = 'absolute';
   container.style.left = '-9999px';
   container.style.top = '0';
   document.body.appendChild(container);
+
+  const baseFilename = `planning-${params.day.toLowerCase()}-S${params.weekNumber}-${params.year}`;
 
   try {
     const canvas = await html2canvas(container, {
@@ -228,8 +230,12 @@ export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Prom
       backgroundColor: '#ffffff',
     });
 
-    document.body.removeChild(container);
+    if (params.format === 'png') {
+      await saveCanvasAsPNG(canvas, `${baseFilename}.png`);
+      return;
+    }
 
+    const { jsPDF } = await import('jspdf');
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -255,10 +261,11 @@ export const exportTimelineToPDF = async (params: ExportTimelinePDFParams): Prom
     const y = (pageH - imgH) / 2;
 
     pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 'JPEG', x, y, imgW, imgH);
-    pdf.save(`planning-${params.day.toLowerCase()}-S${params.weekNumber}-${params.year}.pdf`);
+    pdf.save(`${baseFilename}.pdf`);
   } catch (error) {
-    document.body.removeChild(container);
-    console.error('Erreur export PDF timeline:', error);
+    console.error('Erreur export timeline:', error);
     throw error;
+  } finally {
+    container.remove();
   }
 };

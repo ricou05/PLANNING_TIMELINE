@@ -868,7 +868,7 @@ const saveCanvasAsPDF = async (canvas: HTMLCanvasElement, filename: string): Pro
   pdf.save(filename);
 };
 
-const saveCanvasAsPNG = (canvas: HTMLCanvasElement, filename: string): Promise<void> =>
+export const saveCanvasAsPNG = (canvas: HTMLCanvasElement, filename: string): Promise<void> =>
   new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
       if (!blob) {

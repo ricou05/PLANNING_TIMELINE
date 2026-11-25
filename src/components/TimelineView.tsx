@@ -9,7 +9,7 @@ import { checkPeriodOverlap, getPeriodType, getOtherPeriod } from '../utils/peri
 import { calculateDailyHours, calculateWeeklyHours } from '../utils/scheduleCalculations';
 import { calculateDayTotal } from '../utils/totalsCalculations';
 import { exportTimelineToPDF } from '../utils/pdfTimelineExport';
-import { X, FileDown, CalendarOff, Users, MoveVertical, Info } from 'lucide-react';
+import { X, FileDown, Image, CalendarOff, Users, MoveVertical, Info } from 'lucide-react';
 import {
   isPlanningDrag,
   isDayDrag,
@@ -126,7 +126,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [draggedEmployeeIndex, setDraggedEmployeeIndex] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  // Format en cours d'export (null = aucun) : désactive les deux boutons
+  const [exportingFormat, setExportingFormat] = useState<'pdf' | 'png' | null>(null);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | null>(null);
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [dragEnd, setDragEnd] = useState<number | null>(null);
@@ -505,8 +506,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     });
   };
 
-  const handleExportPDF = async () => {
-    setIsExporting(true);
+  const handleExport = async (format: 'pdf' | 'png') => {
+    setExportingFormat(format);
     try {
       await exportTimelineToPDF({
         employees,
@@ -516,11 +517,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         weekNumber,
         year,
         managedColors,
+        format,
       });
     } catch {
       // silent
     } finally {
-      setIsExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -550,14 +552,26 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             </span>
           </div>
         </div>
-        <button
-          onClick={handleExportPDF}
-          disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 border border-gray-300 shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <FileDown className="w-4 h-4" />
-          {isExporting ? 'Export en cours...' : `Exporter ${day} en PDF`}
-        </button>
+        <div className="flex rounded-lg border border-gray-300 shadow-sm overflow-hidden">
+          <button
+            onClick={() => handleExport('pdf')}
+            disabled={exportingFormat !== null}
+            title="PDF pour l'impression"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-4 h-4" />
+            {exportingFormat === 'pdf' ? 'Export en cours...' : `Exporter ${day} en PDF`}
+          </button>
+          <button
+            onClick={() => handleExport('png')}
+            disabled={exportingFormat !== null}
+            title="Image PNG à partager (WhatsApp, e-mail…)"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium border-l border-gray-300 hover:bg-gray-50 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Image className="w-4 h-4" />
+            {exportingFormat === 'png' ? 'Export...' : 'PNG'}
+          </button>
+        </div>
       </div>
 
       <div
