@@ -9,8 +9,11 @@ import {
   canonicalName,
   predecessorsOf,
   resolveSuccessor,
+  sameFirstName,
+  missingSuccessors,
 } from '../../utils/history/correspondences';
-import { weekLabel } from '../../utils/history/reference';
+import { weekLabel, rangeLabel } from '../../utils/history/reference';
+import { toIsoDay } from '../../utils/calendarInfo';
 import { formatHoursHM } from '../../utils/timeUtils';
 
 interface CorrespondencesDialogProps {
@@ -19,17 +22,26 @@ interface CorrespondencesDialogProps {
   onSave: (c: Correspondences) => Promise<void>;
   canEdit: boolean;
   onClose: () => void;
+  /** Semaine de référence N-1 : le tableau se limite à un mois avant et un mois après */
+  referenceDates: Date[];
 }
 
 interface N1Person {
   name: string;
+  /** Heures sur la période affichée (un mois avant / après la semaine de référence) */
   hours: number;
+  /** Heures sur toute la saison */
+  seasonHours: number;
   first: HistoryWeek | null;
   last: HistoryWeek | null;
 }
 
 const AUTO = '';
 const NONE = '__aucun__';
+const OTHER = '__autre__';
+
+/** Marge autour de la semaine de référence : un mois avant, un mois après */
+const WINDOW_DAYS = 31;
 
 // Table « Correspondances N / N-1 » : pour chaque saisonnier de l'an passé,
 // qui reprend son poste cette saison (et corrections de prénoms mal écrits)
@@ -39,12 +51,25 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
   onSave,
   canEdit,
   onClose,
+  referenceDates,
 }) => {
   const [weeks, setWeeks] = useState<HistoryWeek[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Correspondences>(correspondences);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  /** Ligne où l'on tape le nom d'un nouveau salarié, et le nom en cours de saisie */
+  const [typing, setTyping] = useState<{ name: string; value: string } | null>(null);
+
+  // Période affichée : un mois avant le lundi et un mois après le dimanche de référence
+  const windowStart = toIsoDay(new Date(referenceDates[0].getTime() - WINDOW_DAYS * 86400000));
+  const windowEnd = toIsoDay(new Date(referenceDates[6].getTime() + WINDOW_DAYS * 86400000));
+  const windowDates = [
+    new Date(referenceDates[0].getTime() - WINDOW_DAYS * 86400000),
+    ...referenceDates.slice(1, 6),
+    new Date(referenceDates[6].getTime() + WINDOW_DAYS * 86400000),
+  ];
 
   useEffect(() => {
     getAllHistoryWeeks()
@@ -52,15 +77,17 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
       .catch((err) => setLoadError(describeFirestoreError(err)));
   }, []);
 
-  // Saisonniers N-1 : heures sur la saison, première et dernière semaine travaillées
-  const people = useMemo<N1Person[]>(() => {
+  // Saisonniers N-1 : heures sur la période et sur la saison, première et
+  // dernière semaine travaillées
+  const allPeople = useMemo<N1Person[]>(() => {
     if (!weeks) return [];
     const map = new Map<string, N1Person>();
     weeks.forEach((week) =>
       week.days.forEach((day) =>
         day.entries.forEach((e) => {
-          const p = map.get(e.name) ?? { name: e.name, hours: 0, first: null, last: null };
-          p.hours += e.hours;
+          const p = map.get(e.name) ?? { name: e.name, hours: 0, seasonHours: 0, first: null, last: null };
+          p.seasonHours += e.hours;
+          if (day.date >= windowStart && day.date <= windowEnd) p.hours += e.hours;
           if (e.hours > 0) {
             p.first ??= week;
             p.last = week;
@@ -69,10 +96,19 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
         })
       )
     );
-    return [...map.values()].sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name, 'fr'));
-  }, [weeks]);
+    return [...map.values()].sort(
+      (a, b) => b.hours - a.hours || b.seasonHours - a.seasonHours || a.name.localeCompare(b.name, 'fr')
+    );
+  }, [weeks, windowStart, windowEnd]);
 
-  const n1Names = people.map((p) => p.name);
+  // Par défaut, seuls les saisonniers présents autour de la période
+  const people = showAll ? allPeople : allPeople.filter((p) => p.hours > 0);
+  const hiddenCount = allPeople.length - allPeople.filter((p) => p.hours > 0).length;
+  const allNames = allPeople.map((p) => p.name);
+
+  // Salariés N choisis dans la table mais pas encore dans le planning
+  const toAdd = missingSuccessors(draft, employees, allNames);
+  const extraNames = toAdd.map((m) => m.name);
 
   const setAlias = (name: string, target: string) => {
     setDraft((d) => {
@@ -86,6 +122,7 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
   const setSuccessor = (name: string, value: string) => {
     setDraft((d) => {
       const successors = { ...d.successors };
+      if (value === OTHER) return d;
       if (value === AUTO) delete successors[name];
       else successors[name] = value === NONE ? '' : value;
       return { ...d, successors };
@@ -139,14 +176,29 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
               <RefreshCw className="w-4 h-4 animate-spin" /> Lecture de l'historique…
             </p>
           )}
-          {weeks && people.length === 0 && <p>Aucun historique importé.</p>}
+          {weeks && allPeople.length === 0 && <p>Aucun historique importé.</p>}
+          {allPeople.length > 0 && (
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-indigo-900 bg-indigo-50 rounded px-2 py-1">
+              <span>
+                {showAll ? 'Toute la saison' : `Saisonniers présents du ${rangeLabel(windowDates)}`} (un mois avant et
+                après la semaine de référence)
+              </span>
+              {hiddenCount > 0 && (
+                <button onClick={() => setShowAll((v) => !v)} className="underline hover:text-indigo-700">
+                  {showAll ? 'Masquer les autres' : `Voir aussi les ${hiddenCount} autres de la saison`}
+                </button>
+              )}
+            </p>
+          )}
 
           {people.length > 0 && (
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50 text-gray-700">
                   <th className="border border-gray-200 px-2 py-1 text-left">Saisonnier N-1</th>
-                  <th className="border border-gray-200 px-2 py-1 text-right">Heures</th>
+                  <th className="border border-gray-200 px-2 py-1 text-right" title="Sur la période affichée (saison entière entre parenthèses)">
+                    Heures
+                  </th>
                   <th className="border border-gray-200 px-2 py-1 text-left">Présent</th>
                   <th className="border border-gray-200 px-2 py-1 text-left w-[22%]">Même personne que</th>
                   <th className="border border-gray-200 px-2 py-1 text-left w-[28%]">Poste repris par (cette saison)</th>
@@ -168,6 +220,7 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
                       <td className="border border-gray-200 px-2 py-1 font-medium text-gray-800">{p.name}</td>
                       <td className="border border-gray-200 px-2 py-1 text-right whitespace-nowrap">
                         {formatHoursHM(p.hours)}
+                        <span className="text-xs text-gray-400"> ({formatHoursHM(p.seasonHours)})</span>
                       </td>
                       <td className="border border-gray-200 px-2 py-1 whitespace-nowrap text-xs">
                         {p.first && p.last
@@ -184,7 +237,7 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
                           onChange={(e) => setAlias(p.name, e.target.value)}
                         >
                           <option value="">—</option>
-                          {n1Names
+                          {allNames
                             .filter((n) => n !== p.name && !draft.aliases[n])
                             .map((n) => (
                               <option key={n} value={n}>
@@ -195,23 +248,66 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
                       </td>
                       <td className="border border-gray-200 px-2 py-1">
                         {alias ? (
-                          <span className="text-xs">comme {alias} → {resolved.employee?.name ?? 'non repris'}</span>
+                          <span className="text-xs">
+                            comme {alias} → {resolved.employee?.name ?? (draft.successors[canon] || 'non repris')}
+                          </span>
+                        ) : typing?.name === p.name ? (
+                          <form
+                            className="flex gap-1"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (typing.value.trim()) setSuccessor(p.name, typing.value.trim());
+                              setTyping(null);
+                            }}
+                          >
+                            <input
+                              autoFocus
+                              value={typing.value}
+                              onChange={(e) => setTyping({ name: p.name, value: e.target.value })}
+                              placeholder="Nom du nouveau salarié"
+                              className="flex-1 min-w-0 text-sm border border-indigo-300 rounded px-1.5 py-1"
+                            />
+                            <button type="submit" className="px-2 text-xs font-medium text-white bg-indigo-600 rounded">
+                              OK
+                            </button>
+                            <button type="button" onClick={() => setTyping(null)} className="px-1 text-xs text-gray-500">
+                              Annuler
+                            </button>
+                          </form>
                         ) : (
                           <select
                             className={select}
                             value={value}
                             disabled={!canEdit}
-                            onChange={(e) => setSuccessor(p.name, e.target.value)}
+                            onChange={(e) => {
+                              if (e.target.value === OTHER) setTyping({ name: p.name, value: '' });
+                              else setSuccessor(p.name, e.target.value);
+                            }}
                           >
                             <option value={AUTO}>
                               Automatique : {autoResult.employee?.name ?? 'personne'}
                             </option>
                             <option value={NONE}>Non repris</option>
-                            {employees.map((emp) => (
-                              <option key={emp.id} value={emp.name}>
-                                {emp.name}
-                              </option>
-                            ))}
+                            <optgroup label="Dans le planning">
+                              {employees.map((emp) => (
+                                <option key={emp.id} value={emp.name}>
+                                  {emp.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Pas encore dans le planning">
+                              {extraNames.map((n) => (
+                                <option key={n} value={n}>
+                                  {n} (à ajouter)
+                                </option>
+                              ))}
+                              {/* Saisonnier qui revient : même prénom, pas encore dans le planning */}
+                              {!employees.some((emp) => sameFirstName(emp.name, canon)) &&
+                                !extraNames.some((n) => sameFirstName(n, canon)) && (
+                                  <option value={canon}>+ {canon} (nouveau salarié)</option>
+                                )}
+                              <option value={OTHER}>+ Autre salarié…</option>
+                            </optgroup>
                           </select>
                         )}
                       </td>
@@ -227,7 +323,7 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
               <div className="font-medium text-indigo-900 mb-1">Résultat : postes de cette saison</div>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 text-gray-700">
                 {employees.map((emp) => {
-                  const preds = predecessorsOf(emp, n1Names, draft, employees);
+                  const preds = predecessorsOf(emp, allNames, draft, employees);
                   return (
                     <li key={emp.id}>
                       <span className="font-medium">{emp.name}</span> ←{' '}
@@ -236,6 +332,21 @@ const CorrespondencesDialog: React.FC<CorrespondencesDialogProps> = ({
                   );
                 })}
               </ul>
+              {toAdd.length > 0 && (
+                <>
+                  <div className="font-medium text-indigo-900 mt-2 mb-1">À ajouter au planning quand ils arrivent</div>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 text-gray-700">
+                    {toAdd.map((m) => (
+                      <li key={m.name}>
+                        <span className="font-medium">{m.name}</span> ← {m.predecessors.join(', ')}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-gray-500 mt-1">
+                    « Reprendre les horaires N-1 » proposera de les ajouter au planning.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

@@ -26,6 +26,8 @@ interface ReferencePanelProps {
   onPreviewPrefill: () => PrefillResult | null;
   /** Applique le préremplissage (annulable par Ctrl+Z) */
   onApplyPrefill: () => void;
+  /** Ajoute au planning des salariés prévus dans la table des correspondances */
+  onAddEmployees: (names: string[]) => void;
 }
 
 /**
@@ -42,11 +44,20 @@ const ReferencePanel: React.FC<ReferencePanelProps> = ({
   onOpenCorrespondences,
   onPreviewPrefill,
   onApplyPrefill,
+  onAddEmployees,
 }) => {
   const { open, toggleOpen, targetDates, suggestion, reference, isManual, chooseReference, load, refWeek } = state;
   const [showWeek, setShowWeek] = useState(false);
   const [preview, setPreview] = useState<PrefillResult | null>(null);
   const [prefillDone, setPrefillDone] = useState<string | null>(null);
+
+  // Après l'ajout de salariés, on recalcule la proposition avec la nouvelle liste
+  const [recompute, setRecompute] = useState(false);
+  useEffect(() => {
+    if (!recompute) return;
+    setRecompute(false);
+    setPreview(onPreviewPrefill());
+  }, [employees, recompute, onPreviewPrefill]);
 
   // Changement de semaine : on oublie la proposition et le message précédents
   useEffect(() => {
@@ -152,6 +163,29 @@ const ReferencePanel: React.FC<ReferencePanelProps> = ({
             </span>
           ) : (
             <span>Rien à remplir : les cases concernées sont déjà remplies, ou aucun salarié n'a de poste N-1.</span>
+          )}
+          {preview.missing.length > 0 && (
+            <span className="w-full flex flex-wrap items-center gap-2 text-indigo-900">
+              <span>
+                À ajouter au planning pour reprendre leur poste :{' '}
+                {preview.missing.map((m, i) => (
+                  <span key={m.name}>
+                    {i > 0 && ', '}
+                    <strong>{m.name}</strong> (poste de {m.predecessors.join(', ')})
+                  </span>
+                ))}
+                .
+              </span>
+              <button
+                onClick={() => {
+                  onAddEmployees(preview.missing.map((m) => m.name));
+                  setRecompute(true);
+                }}
+                className="px-2.5 py-0.5 font-medium text-indigo-700 bg-indigo-50 border border-indigo-300 rounded hover:bg-indigo-100"
+              >
+                Ajouter au planning
+              </button>
+            </span>
           )}
           {preview.withoutReference.length > 0 && (
             <span className="text-amber-700">

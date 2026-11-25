@@ -6,7 +6,7 @@
 import { Employee, Schedule } from '../../types';
 import { clampTime } from '../timeUtils';
 import { HistoryEntry, HistoryWeek } from './types';
-import { Correspondences, resolveSuccessor } from './correspondences';
+import { Correspondences, resolveSuccessor, missingSuccessors, namesOfWeek } from './correspondences';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -47,6 +47,8 @@ export interface PrefillResult {
   kept: number;
   /** Salariés sans poste N-1 cette semaine-là */
   withoutReference: Employee[];
+  /** Salariés prévus dans la table mais pas encore dans le planning (poste N-1 présent cette semaine-là) */
+  missing: { name: string; predecessors: string[] }[];
 }
 
 export function prefillFromReference(
@@ -95,5 +97,6 @@ export function prefillFromReference(
     filled,
     kept,
     withoutReference: employees.filter((e) => !withReference.has(e.id)),
+    missing: missingSuccessors(c, employees, namesOfWeek(week)),
   };
 }

@@ -94,3 +94,30 @@ export function referenceHoursByEmployee(
   );
   return result;
 }
+
+/** Nom de salarié N déjà présent dans le planning (comparaison sans casse ni accents) */
+export const isInPlanning = (name: string, employees: Employee[]): boolean => findEmployee(employees, name) !== null;
+
+/** Même prénom (premier mot), sans casse ni accents */
+export const sameFirstName = (a: string, b: string): boolean => firstNameKey(a) === firstNameKey(b);
+
+/**
+ * Salariés N choisis dans la table mais pas encore dans le planning, avec
+ * les prénoms N-1 dont ils reprennent le poste (limité à `n1Names` si fourni).
+ */
+export function missingSuccessors(
+  c: Correspondences,
+  employees: Employee[],
+  n1Names?: string[]
+): { name: string; predecessors: string[] }[] {
+  const allowed = n1Names ? new Set(n1Names.map((n) => canonicalName(n, c))) : null;
+  const byName = new Map<string, string[]>();
+  Object.entries(c.successors).forEach(([n1, target]) => {
+    if (!target || isInPlanning(target, employees)) return;
+    if (allowed && !allowed.has(n1)) return;
+    const list = byName.get(target) ?? [];
+    list.push(n1);
+    byName.set(target, list);
+  });
+  return [...byName.entries()].map(([name, predecessors]) => ({ name, predecessors }));
+}

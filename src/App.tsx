@@ -222,6 +222,19 @@ function App() {
     }
   };
 
+  // Ajoute des salariés nommés (prévus dans la table des correspondances N / N-1)
+  const handleAddNamedEmployees = useCallback((names: string[]) => {
+    setEmployees(prev => {
+      const known = new Set(prev.map(e => e.name.trim().toLowerCase()));
+      let maxId = prev.reduce((max, emp) => Math.max(max, emp.id), 0);
+      const added = names
+        .filter(name => !known.has(name.trim().toLowerCase()))
+        .map(name => ({ id: ++maxId, name: name.trim() }));
+      if (added.length) setEmployeeCount(prev.length + added.length);
+      return [...prev, ...added];
+    });
+  }, []);
+
   const handleAddEmployee = () => {
     const maxId = employees.reduce((max, emp) => Math.max(max, emp.id), 0);
     const newEmployee: Employee = {
@@ -508,6 +521,7 @@ function App() {
           // Annulable par Ctrl+Z (une seule étape d'historique)
           setSchedules((prev) => prefillFromReference(prev, refWeek, employees, correspondences).schedules);
         }}
+        onAddEmployees={handleAddNamedEmployees}
       />
     );
     // Heures N-1 du poste de chaque salarié, rappelées sous son total
@@ -864,6 +878,7 @@ function App() {
           onSave={correspondencesState.save}
           canEdit={isAdmin}
           onClose={() => setShowCorrespondences(false)}
+          referenceDates={referenceWeek.reference.dates}
         />
       )}
 
